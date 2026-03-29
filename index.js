@@ -75,6 +75,55 @@ app.get('/tasks/:id', (req, res) => {
   res.json({ ...task, events });
 });
 
+// POST /tasks/:id/validate-brief
+app.post('/tasks/:id/validate-brief', async (req, res) => {
+  const { id } = req.params;
+  const body = req.body || {};
+
+  const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+
+  const missing = [];
+
+  if (typeof body.objective !== 'string' || body.objective.length < 20) missing.push('objective');
+  if (typeof body.scope !== 'string' || body.scope.length < 1) missing.push('scope');
+  if (typeof body.constraints !== 'string' || body.constraints.length < 1) missing.push('constraints');
+  if (!Array.isArray(body.acceptance_criteria) || body.acceptance_criteria.length < 2) missing.push('acceptance_criteria');
+  if (!Array.isArray(body.verification_steps) || body.verification_steps.length < 1) missing.push('verification_steps');
+  if (typeof body.repo !== 'string' || body.repo.length < 1) missing.push('repo');
+  if (!['low', 'medium', 'high'].includes(body.risk_level)) missing.push('risk_level');
+
+  if (missing.length > 0) {
+    db.prepare(`UPDATE tasks SET state = 'blocked', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+    db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(
+      id, 'brief_rejected', JSON.stringify({ missing })
+    );
+
+    const chatId = task.brandon_chat_id || process.env.BRANDON_CHAT_ID;
+    await sendAlert(
+      chatId,
+      `⚠️ Brief for OC-${id} rejected.\nMissing: ${missing.join(', ')}\nComplete brief before dispatching Builder.`
+    ).catch(() => {});
+
+    return res.status(400).json({ error: `Brief rejected: missing ${missing.join(', ')}` });
+  }
+
+  const briefPayload = JSON.stringify({
+    objective: body.objective,
+    scope: body.scope,
+    constraints: body.constraints,
+    acceptance_criteria: body.acceptance_criteria,
+    verification_steps: body.verification_steps,
+    repo: body.repo,
+    risk_level: body.risk_level
+  });
+
+  db.prepare(`UPDATE tasks SET state = 'contract_written', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+  db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'brief_validated', briefPayload);
+
+  return res.json({ task_id: id, state: 'contract_written', approved: true });
+});
+
 // POST /tasks/:id/pr
 app.post('/tasks/:id/pr', async (req, res) => {
   const { id } = req.params;
