@@ -13,7 +13,7 @@ const RESEARCH_STATES = new Set([
 
 const TRANSITIONS = {
   // Build states
-  brief_received: ['contract_written', 'blocked', 'failed', 'escalated'],
+  brief_received: ['contract_written', 'research_requested', 'blocked', 'failed', 'escalated'],
   contract_written: ['builder_dispatched', 'blocked', 'failed', 'escalated'],
   builder_dispatched: ['build_in_progress', 'blocked', 'failed', 'escalated'],
   build_in_progress: ['pr_opened', 'blocked', 'failed', 'escalated'],
