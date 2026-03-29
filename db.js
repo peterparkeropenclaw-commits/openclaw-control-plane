@@ -17,6 +17,7 @@ db.exec(`
     origin TEXT,
     owner TEXT DEFAULT 'peter',
     state TEXT DEFAULT 'brief_received',
+    type TEXT NOT NULL DEFAULT 'build',
     pr_number INTEGER,
     pr_url TEXT,
     deploy_url TEXT,
@@ -45,5 +46,12 @@ db.exec(`
     resolved_at DATETIME
   );
 `);
+
+// Add `type` column to existing databases (idempotent)
+try {
+  db.exec(`ALTER TABLE tasks ADD COLUMN type TEXT NOT NULL DEFAULT 'build'`);
+} catch (e) {
+  if (!e.message.includes('duplicate column')) throw e;
+}
 
 module.exports = db;

@@ -3,7 +3,7 @@ require('dotenv').config();
 
 const express = require('express');
 const db = require('./db');
-const { isValidTransition } = require('./state-machine');
+const { isValidTransition, checkTypeRouting } = require('./state-machine');
 const { notifyState, sendAlert } = require('./notify');
 const { startTimeouts } = require('./timeouts');
 const { generateDashboardHTML } = require('./dashboard');
@@ -15,8 +15,13 @@ const PORT = process.env.PORT || 3210;
 
 // POST /tasks
 app.post('/tasks', async (req, res) => {
-  const { title, repo, origin, brandon_chat_id, discord_channel } = req.body;
+  const { title, repo, origin, brandon_chat_id, discord_channel, type } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
+
+  const taskType = type || 'build';
+  if (!['build', 'research'].includes(taskType)) {
+    return res.status(400).json({ error: 'type must be "build" or "research"' });
+  }
 
   const existing = db.prepare(
     `SELECT id FROM tasks WHERE title = ? AND repo = ? AND created_at > datetime('now', '-60 seconds')`
@@ -25,9 +30,9 @@ app.post('/tasks', async (req, res) => {
 
   const id = `OC-${Date.now()}`;
   db.prepare(`
-    INSERT INTO tasks (id, title, repo, origin, brandon_chat_id, discord_channel, state)
-    VALUES (?, ?, ?, ?, ?, ?, 'brief_received')
-  `).run(id, title, repo || null, origin || null, brandon_chat_id || null, discord_channel || null);
+    INSERT INTO tasks (id, title, repo, origin, brandon_chat_id, discord_channel, state, type)
+    VALUES (?, ?, ?, ?, ?, ?, 'brief_received', ?)
+  `).run(id, title, repo || null, origin || null, brandon_chat_id || null, discord_channel || null, taskType);
 
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'created', null);
 
@@ -48,6 +53,9 @@ app.post('/tasks/:id/state', async (req, res) => {
   if (!isValidTransition(task.state, state)) {
     return res.status(400).json({ error: `Invalid transition: ${task.state} → ${state}` });
   }
+
+  const routingError = checkTypeRouting(task.type, state);
+  if (routingError) return res.status(400).json(routingError);
 
   db.prepare(`UPDATE tasks SET state = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(state, id);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, state, payload ? String(payload) : null);
