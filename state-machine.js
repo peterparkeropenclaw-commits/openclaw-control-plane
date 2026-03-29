@@ -1,19 +1,21 @@
 'use strict';
 
 const TRANSITIONS = {
-  brief_received: ['contract_written', 'blocked', 'escalated'],
-  contract_written: ['builder_dispatched', 'blocked', 'escalated'],
-  builder_dispatched: ['build_in_progress', 'blocked', 'escalated'],
-  build_in_progress: ['pr_opened', 'blocked', 'escalated'],
-  pr_opened: ['review_pending', 'blocked', 'escalated'],
-  review_pending: ['review_approved', 'review_changes_requested', 'blocked', 'escalated'],
-  review_approved: ['merge_pending', 'blocked', 'escalated'],
-  review_changes_requested: ['builder_dispatched', 'blocked', 'escalated'],
-  merge_pending: ['deployed', 'blocked', 'escalated'],
-  deployed: ['completed', 'blocked', 'escalated'],
-  completed: ['blocked', 'escalated'],
-  blocked: ['blocked', 'escalated'],
-  escalated: ['blocked', 'escalated']
+  brief_received: ['contract_written', 'blocked', 'failed', 'escalated'],
+  contract_written: ['builder_dispatched', 'blocked', 'failed', 'escalated'],
+  builder_dispatched: ['build_in_progress', 'blocked', 'failed', 'escalated'],
+  build_in_progress: ['pr_opened', 'blocked', 'failed', 'escalated'],
+  pr_opened: ['review_pending', 'blocked', 'failed', 'escalated'],
+  review_pending: ['review_approved', 'review_changes_requested', 'blocked', 'failed', 'escalated'],
+  review_approved: ['merge_pending', 'blocked', 'failed', 'escalated'],
+  review_changes_requested: ['builder_dispatched', 'blocked', 'failed', 'escalated'],
+  merge_pending: ['deployed', 'deploy_in_progress', 'blocked', 'failed', 'escalated'],
+  deploy_in_progress: ['deployed', 'failed', 'blocked', 'escalated'],
+  deployed: ['completed', 'blocked', 'failed', 'escalated'],
+  completed: ['blocked', 'failed', 'escalated'],
+  blocked: ['blocked', 'failed', 'escalated'],
+  failed: ['blocked', 'failed', 'escalated'],
+  escalated: ['blocked', 'failed', 'escalated']
 };
 
 function isValidTransition(fromState, toState) {
