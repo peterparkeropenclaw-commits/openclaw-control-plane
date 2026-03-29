@@ -6,6 +6,7 @@ const db = require('./db');
 const { isValidTransition } = require('./state-machine');
 const { notifyState, sendAlert } = require('./notify');
 const { startTimeouts } = require('./timeouts');
+const { generateDashboardHTML } = require('./dashboard');
 
 const app = express();
 app.use(express.json());
@@ -254,6 +255,16 @@ app.post('/events', (req, res) => {
 
   const result = db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(task_id, event_type, payload ? String(payload) : null);
   res.json({ event_id: result.lastInsertRowid });
+});
+
+// GET /dashboard
+app.get('/dashboard', (req, res) => {
+  const filter = req.query.filter || 'active';
+  const sort = req.query.sort || 'age';
+  const tasks = db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all();
+  const events = db.prepare('SELECT * FROM events ORDER BY created_at ASC').all();
+  res.setHeader('Content-Type', 'text/html');
+  res.send(generateDashboardHTML(tasks, events, filter, sort));
 });
 
 // GET /health
