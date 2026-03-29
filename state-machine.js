@@ -8,7 +8,10 @@ const BUILD_STATES = new Set([
 
 const RESEARCH_STATES = new Set([
   'research_requested', 'research_in_progress', 'analysis_in_progress',
-  'idea_scored', 'idea_approved', 'idea_rejected'
+  'idea_scored', 'idea_approved', 'idea_rejected',
+  // Added in OC-1774818849212
+  'research_blocked', 'deep_research_in_progress',
+  'approved_for_build', 'approved_for_test', 'backlog'
 ]);
 
 const TRANSITIONS = {
@@ -29,12 +32,27 @@ const TRANSITIONS = {
   failed: ['blocked', 'failed', 'escalated'],
   escalated: ['blocked', 'failed', 'escalated'],
   // Research states
-  research_requested: ['research_in_progress', 'blocked', 'failed', 'escalated'],
-  research_in_progress: ['analysis_in_progress', 'blocked', 'failed', 'escalated'],
-  analysis_in_progress: ['idea_scored', 'blocked', 'failed', 'escalated'],
-  idea_scored: ['idea_approved', 'idea_rejected', 'blocked', 'failed', 'escalated'],
+  research_requested: ['research_in_progress', 'backlog', 'blocked', 'failed', 'escalated'],
+  research_in_progress: [
+    'analysis_in_progress', 'research_blocked', 'deep_research_in_progress',
+    'blocked', 'failed', 'escalated'
+  ],
+  analysis_in_progress: [
+    'idea_scored', 'approved_for_build', 'approved_for_test', 'idea_rejected',
+    'blocked', 'failed', 'escalated'
+  ],
+  idea_scored: [
+    'idea_approved', 'idea_rejected', 'approved_for_build', 'approved_for_test',
+    'blocked', 'failed', 'escalated'
+  ],
   idea_approved: ['blocked', 'failed', 'escalated'],
-  idea_rejected: ['blocked', 'failed', 'escalated']
+  idea_rejected: ['blocked', 'failed', 'escalated'],
+  // Added in OC-1774818849212
+  research_blocked: ['research_in_progress', 'blocked', 'failed', 'escalated'],
+  deep_research_in_progress: ['analysis_in_progress', 'blocked', 'failed', 'escalated'],
+  approved_for_build: ['blocked', 'failed', 'escalated'],
+  approved_for_test: ['blocked', 'failed', 'escalated'],
+  backlog: ['research_requested', 'blocked', 'failed', 'escalated']
 };
 
 function isValidTransition(fromState, toState) {
