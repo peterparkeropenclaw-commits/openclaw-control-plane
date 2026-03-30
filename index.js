@@ -204,18 +204,22 @@ app.post('/tasks/:id/verdict', async (req, res) => {
   await notifyState(updated, newState, { issues }).catch(() => {});
 
   if (verdict === 'approved') {
-    enqueueAction({
-      taskId: id,
-      actionType: 'merge_pr',
-      payload: { pr_number: updated.pr_number, pr_url: updated.pr_url, repo: updated.repo }
-    });
+    if (!updated.pr_number || !updated.pr_url) {
+      process.stderr.write(`[cp] BLOCKED merge_pr for ${id}: pr_number=${updated.pr_number} pr_url=${updated.pr_url} — cannot proceed without valid PR metadata\n`);
+    } else {
+      enqueueAction({
+        taskId: id,
+        actionType: 'merge_pr',
+        payload: { pr_number: updated.pr_number, pr_url: updated.pr_url, repo: updated.repo }
+      });
+    }
   }
 
   if (verdict === 'changes_requested') {
     enqueueAction({
       taskId: id,
       actionType: 'notify_telegram',
-      payload: { message_type: 'changes_requested', pr_number: updated.pr_number, task_id: id }
+      payload: { message_type: 'changes_requested', pr_number: updated.pr_number || 'unknown', task_id: id }
     });
   }
 
@@ -669,7 +673,7 @@ app.get('/dashboard', (req, res) => {
 
 // GET /health
 app.get('/health', (req, res) => {
-  const row = db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE state NOT IN ('completed', 'blocked')`).get();
+  const row = db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE state NOT IN ('completed', 'blocked', 'archived', 'cancelled', 'abandoned')`).get();
   res.json({ status: 'ok', uptime: process.uptime(), tasks_active: row.count, autonomy_engine: true });
 });
 
