@@ -468,6 +468,8 @@ app.get('/health/full', async (req, res) => {
     deploy_worker,
     verify_worker,
     notify_worker,
+    bootstrap_worker,
+    qa_worker,
     cloudflare_tunnel,
     github_token,
     telegram
@@ -477,6 +479,8 @@ app.get('/health/full', async (req, res) => {
     checkPm2Worker('openclaw-deploy-worker'),
     checkPm2Worker('openclaw-verify-worker'),
     checkPm2Worker('openclaw-notify-worker'),
+    checkPm2Worker('openclaw-bootstrap-worker'),
+    checkPm2Worker('openclaw-qa-worker'),
     checkCloudflareTunnel(),
     checkGithubToken(),
     checkTelegram()
@@ -491,6 +495,8 @@ app.get('/health/full', async (req, res) => {
     deploy_worker,
     verify_worker,
     notify_worker,
+    bootstrap_worker,
+    qa_worker,
     cloudflare_tunnel,
     github_token,
     telegram,

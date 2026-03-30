@@ -16,7 +16,7 @@ const TRANSITIONS = {
   deploy_in_progress: ['deployed', 'completed', 'blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
   deployed: ['completed', 'blocked', 'failed', 'escalated', 'qa_passed', 'qa_failed', 'archived', 'cancelled', 'abandoned'],
   qa_passed: ['completed', 'archived', 'cancelled', 'abandoned'],
-  qa_failed: ['archived', 'cancelled', 'abandoned'],
+  qa_failed: ['deployed', 'build_in_progress', 'archived', 'cancelled', 'abandoned'],
   repo_bootstrap_pending: ['contract_written', 'blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
   completed: [],
   archived: [],
