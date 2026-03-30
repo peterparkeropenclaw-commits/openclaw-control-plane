@@ -405,7 +405,7 @@ app.get('/health/full', async (req, res) => {
 
   async function checkReviewerBot() {
     try {
-      const r = await fetchWithTimeout('http://localhost:3205/health', { method: 'HEAD' }, 10000);
+      const r = await fetchWithTimeout('http://localhost:3205/health', { method: 'GET' }, 10000);
       return r.status === 200 ? 'PASS' : `FAIL:HTTP_${r.status}`;
     } catch (e) { return `FAIL:${e.message}`; }
   }
