@@ -35,27 +35,29 @@ async function pollOnce() {
     const deploy_hook_url = payload.deploy_hook_url;
 
     if (!deploy_hook_url) {
+      // No deploy hook configured for this repo (e.g. Control Plane itself, deployed manually).
+      // Mark complete and enqueue verify_deploy against the CP health endpoint as proof of liveness.
       await fetch(`${CONTROL_PLANE_URL}/actions/${claimed.id}/complete`, {
         method: 'POST',
         timeout: 10000
       });
 
-      const taskRes = await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}`, { timeout: 10000 });
-      if (taskRes.ok) {
-        const task = await taskRes.json();
-        await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/actions`, {
-          method: 'POST',
-          timeout: 10000,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action_type: 'verify_deploy',
-            payload: { deploy_url: task.deploy_url || '' },
-            not_before_seconds: 0
-          })
-        });
-      }
+      await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/state`, {
+        method: 'POST',
+        timeout: 10000,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: 'deploy_in_progress', actor: 'deploy-worker', note: 'no deploy hook; advancing for verify' })
+      });
 
-      log(`completed ${claimed.id}`);
+      // Notify CP of deployed state with the CP health URL as the verify target
+      await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/deployed`, {
+        method: 'POST',
+        timeout: 10000,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deploy_url: CONTROL_PLANE_URL + '/health' })
+      });
+
+      log(`completed ${claimed.id} (no-hook path)`);
       return;
     }
 

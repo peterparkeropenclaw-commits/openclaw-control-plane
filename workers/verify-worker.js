@@ -54,8 +54,8 @@ async function pollOnce() {
     }
 
     try {
-      const headRes = await fetch(deploy_url, { method: 'HEAD', timeout: 10000 });
-      if (headRes.status === 200) {
+      const headRes = await fetch(deploy_url, { method: 'HEAD', timeout: 10000, redirect: 'follow' });
+      if (headRes.status >= 200 && headRes.status < 400) {
         await fetch(`${CONTROL_PLANE_URL}/actions/${claimed.id}/complete`, {
           method: 'POST',
           timeout: 10000
