@@ -182,7 +182,7 @@ app.post('/tasks/:id/pr', async (req, res) => {
   const updated = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
   await notifyState(updated, 'pr_opened').catch(() => {});
 
-  res.json({ task_id: id, state: 'pr_opened' });
+  res.json({ task_id: id, state: 'pr_opened', pr_number: updated.pr_number, pr_url: updated.pr_url });
 });
 
 // POST /tasks/:id/verdict
