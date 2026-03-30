@@ -311,7 +311,7 @@ app.post('/actions/:id/claim', (req, res) => {
   const result = db.prepare(`
     UPDATE action_queue
     SET status = 'claimed', locked_at = CURRENT_TIMESTAMP, locked_by = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND status = 'pending'
+    WHERE id = ? AND status = 'pending' AND (not_before IS NULL OR not_before <= datetime('now'))
   `).run(worker_id, id);
 
   if (result.changes === 0) {
