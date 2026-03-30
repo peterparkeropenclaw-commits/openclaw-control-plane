@@ -8,7 +8,7 @@ const TRANSITIONS = {
   pr_opened: ['review_pending', 'blocked', 'failed', 'escalated'],
   review_pending: ['review_approved', 'review_changes_requested', 'blocked', 'failed', 'escalated'],
   review_approved: ['merge_in_progress', 'merge_pending', 'blocked', 'failed', 'escalated'],
-  review_changes_requested: ['builder_dispatched', 'blocked', 'failed', 'escalated'],
+  review_changes_requested: ['review_pending', 'review_approved', 'builder_dispatched', 'blocked', 'failed', 'escalated'],
   merge_in_progress: ['merge_pending', 'deploy_in_progress', 'deployed', 'completed', 'blocked', 'failed', 'escalated'],
   merge_pending: ['deployed', 'deploy_in_progress', 'blocked', 'failed', 'escalated'],
   deploy_in_progress: ['deployed', 'completed', 'blocked', 'failed', 'escalated'],
