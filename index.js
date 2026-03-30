@@ -3,7 +3,7 @@ require('dotenv').config();
 
 const express = require('express');
 const db = require('./db');
-const { isValidTransition } = require('./state-machine');
+const { isValidTransition, isTerminalState } = require('./state-machine');
 const { notifyState, sendAlert } = require('./notify');
 const { startTimeouts } = require('./timeouts');
 const { generateDashboardHTML } = require('./dashboard');
@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3210;
-const ACTION_TYPES = new Set(['merge_pr', 'trigger_deploy', 'verify_deploy', 'notify_telegram']);
+const ACTION_TYPES = new Set(['merge_pr', 'trigger_deploy', 'verify_deploy', 'notify_telegram', 'bootstrap_repo', 'qa_smoke_test']);
 
 function getExistingAction(taskId, actionType) {
   return db.prepare(
@@ -92,7 +92,7 @@ app.post('/tasks/:id/state', async (req, res) => {
 app.get('/tasks/active', (req, res) => {
   const tasks = db.prepare(`
     SELECT * FROM tasks
-    WHERE state NOT IN ('completed', 'blocked')
+    WHERE state NOT IN ('completed', 'blocked', 'archived', 'cancelled', 'abandoned')
     ORDER BY created_at DESC
   `).all();
   res.json(tasks);
@@ -258,6 +258,244 @@ app.post('/tasks/:id/deployed', async (req, res) => {
   res.json({ task_id: id, state: 'deployed' });
 });
 
+// POST /tasks/:id/archive
+app.post('/tasks/:id/archive', async (req, res) => {
+  const { id } = req.params;
+  const { reason } = req.body || {};
+
+  const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+
+  if (isTerminalState(task.state)) {
+    return res.status(400).json({ error: `Task is already in terminal state: ${task.state}` });
+  }
+
+  db.prepare(`UPDATE tasks SET state = 'archived', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+  db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'archived', reason ? String(reason) : null);
+
+  res.json({ task_id: id, state: 'archived' });
+});
+
+// POST /tasks/:id/qa_passed
+app.post('/tasks/:id/qa_passed', async (req, res) => {
+  const { id } = req.params;
+
+  const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+
+  if (task.state !== 'deployed' && task.state !== 'qa_passed') {
+    return res.status(400).json({ error: `Expected deployed state, got: ${task.state}` });
+  }
+
+  if (task.state === 'deployed') {
+    db.prepare(`UPDATE tasks SET state = 'qa_passed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+    db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'qa_passed', null);
+  }
+
+  // Transition to completed
+  db.prepare(`UPDATE tasks SET state = 'completed', updated_at = CURRENT_TIMESTAMP, completed_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+  db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'completed', 'qa_passed');
+
+  const updated = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
+  await notifyState(updated, 'completed', { reason: 'qa_passed' }).catch(() => {});
+
+  res.json({ task_id: id, state: 'completed' });
+});
+
+// POST /tasks/:id/qa_failed
+app.post('/tasks/:id/qa_failed', async (req, res) => {
+  const { id } = req.params;
+  const { failing_checks } = req.body || {};
+
+  const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+
+  if (task.state !== 'deployed') {
+    return res.status(400).json({ error: `Expected deployed state, got: ${task.state}` });
+  }
+
+  db.prepare(`UPDATE tasks SET state = 'qa_failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+  db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'qa_failed', failing_checks ? JSON.stringify(failing_checks) : null);
+
+  const updated = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
+  await notifyState(updated, 'qa_failed', { failing_checks }).catch(() => {});
+
+  enqueueAction({
+    taskId: id,
+    actionType: 'notify_telegram',
+    payload: { message_type: 'qa_failed', task_id: id, failing_checks }
+  });
+
+  res.json({ task_id: id, state: 'qa_failed' });
+});
+
+// POST /tasks/:id/validate-repo
+app.post('/tasks/:id/validate-repo', async (req, res) => {
+  const { id } = req.params;
+  const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+  const GITHUB_OWNER = process.env.GITHUB_OWNER;
+  const REVIEWER_TUNNEL_URL = process.env.REVIEWER_TUNNEL_URL;
+
+  const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+  if (!task.repo) return res.status(400).json({ error: 'Task has no repo' });
+  if (!GITHUB_OWNER || !GITHUB_TOKEN) return res.status(500).json({ error: 'GITHUB_OWNER or GITHUB_TOKEN not configured' });
+  if (!REVIEWER_TUNNEL_URL) return res.status(500).json({ error: 'REVIEWER_TUNNEL_URL not configured' });
+
+  try {
+    const hooksRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${task.repo}/hooks`, {
+      headers: {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': `Bearer ${GITHUB_TOKEN}`,
+        'X-GitHub-Api-Version': '2022-11-28'
+      },
+      timeout: 10000
+    });
+
+    if (!hooksRes.ok) {
+      return res.status(502).json({ error: `GitHub API error: ${hooksRes.status}` });
+    }
+
+    const hooks = await hooksRes.json();
+    const validHook = hooks.find(h =>
+      h.active &&
+      h.config && h.config.url && h.config.url.includes(REVIEWER_TUNNEL_URL) &&
+      Array.isArray(h.events) && h.events.includes('pull_request')
+    );
+
+    if (validHook) {
+      return res.json({ valid: true });
+    }
+
+    enqueueAction({
+      taskId: id,
+      actionType: 'bootstrap_repo',
+      payload: { repo: task.repo, task_id: id }
+    });
+
+    return res.json({ valid: false, action: 'bootstrap_repo_enqueued' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /health/full
+app.get('/health/full', async (req, res) => {
+  const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+  const PETER_TELEGRAM_TOKEN = process.env.PETER_TELEGRAM_TOKEN;
+  const BRANDON_CHAT_ID = process.env.BRANDON_CHAT_ID;
+  const REVIEWER_TUNNEL_URL = process.env.REVIEWER_TUNNEL_URL;
+
+  const timeout10s = 10000;
+
+  async function checkReviewerBot() {
+    try {
+      const r = await fetch('http://localhost:3205/health', { method: 'HEAD', timeout: timeout10s });
+      return r.status === 200 ? 'PASS' : `FAIL:HTTP_${r.status}`;
+    } catch (e) { return `FAIL:${e.message}`; }
+  }
+
+  async function checkPm2Worker(name) {
+    try {
+      const { execFile } = require('child_process');
+      const result = await new Promise((resolve, reject) => {
+        execFile('pm2', ['jlist'], { timeout: timeout10s }, (err, stdout) => {
+          if (err) return reject(err);
+          resolve(stdout);
+        });
+      });
+      const list = JSON.parse(result);
+      const proc = list.find(p => p.name === name);
+      if (!proc) return `FAIL:not_found`;
+      return proc.pm2_env && proc.pm2_env.status === 'online' ? 'PASS' : `FAIL:status_${proc.pm2_env && proc.pm2_env.status}`;
+    } catch (e) { return `FAIL:${e.message}`; }
+  }
+
+  async function checkCloudflareTunnel() {
+    if (!REVIEWER_TUNNEL_URL) return 'not_configured';
+    try {
+      const r = await fetch(REVIEWER_TUNNEL_URL, { method: 'HEAD', timeout: timeout10s });
+      return r.status < 500 ? 'PASS' : `FAIL:HTTP_${r.status}`;
+    } catch (e) { return `FAIL:${e.message}`; }
+  }
+
+  async function checkGithubToken() {
+    if (!GITHUB_TOKEN) return 'FAIL:token_not_set';
+    try {
+      const r = await fetch('https://api.github.com/user', {
+        headers: { 'Authorization': `Bearer ${GITHUB_TOKEN}`, 'Accept': 'application/vnd.github+json' },
+        timeout: timeout10s
+      });
+      if (!r.ok) return `FAIL:HTTP_${r.status}`;
+      const body = await r.json();
+      return body.login ? 'PASS' : 'FAIL:no_login';
+    } catch (e) { return `FAIL:${e.message}`; }
+  }
+
+  async function checkTelegram() {
+    if (!PETER_TELEGRAM_TOKEN || !BRANDON_CHAT_ID) return 'FAIL:token_or_chat_not_set';
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${PETER_TELEGRAM_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: BRANDON_CHAT_ID, text: '[health-check] ping', disable_notification: true }),
+        timeout: timeout10s
+      });
+      const body = await r.json();
+      return body.ok ? 'PASS' : `FAIL:${JSON.stringify(body.description || body)}`;
+    } catch (e) { return `FAIL:${e.message}`; }
+  }
+
+  function checkDeployHooks() {
+    const hookKeys = Object.keys(process.env).filter(k => k.startsWith('DEPLOY_HOOK_'));
+    if (hookKeys.length === 0) return 'not_configured';
+    const empty = hookKeys.filter(k => !process.env[k]);
+    return empty.length === 0 ? 'PASS' : `FAIL:empty_hooks:${empty.join(',')}`;
+  }
+
+  const [
+    reviewer_bot,
+    merge_worker,
+    deploy_worker,
+    verify_worker,
+    notify_worker,
+    cloudflare_tunnel,
+    github_token,
+    telegram
+  ] = await Promise.all([
+    checkReviewerBot(),
+    checkPm2Worker('openclaw-merge-worker'),
+    checkPm2Worker('openclaw-deploy-worker'),
+    checkPm2Worker('openclaw-verify-worker'),
+    checkPm2Worker('openclaw-notify-worker'),
+    checkCloudflareTunnel(),
+    checkGithubToken(),
+    checkTelegram()
+  ]);
+
+  const deploy_hooks = checkDeployHooks();
+
+  const checks = {
+    control_plane: 'PASS',
+    reviewer_bot,
+    merge_worker,
+    deploy_worker,
+    verify_worker,
+    notify_worker,
+    cloudflare_tunnel,
+    github_token,
+    telegram,
+    deploy_hooks
+  };
+
+  const failing = Object.entries(checks)
+    .filter(([, v]) => v !== 'PASS' && v !== 'not_configured')
+    .map(([k, v]) => ({ check: k, result: v }));
+
+  const summary = failing.length === 0 ? 'PASS' : 'FAIL';
+
+  res.json({ summary, failing, checks, checked_at: new Date().toISOString() });
+});
 
 // POST /tasks/:id/actions
 app.post('/tasks/:id/actions', (req, res) => {

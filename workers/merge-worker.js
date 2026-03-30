@@ -9,6 +9,34 @@ const GITHUB_OWNER = process.env.GITHUB_OWNER || 'peterparkeropenclaw-commits';
 const PETER_TELEGRAM_TOKEN = process.env.PETER_TELEGRAM_TOKEN;
 const BRANDON_CHAT_ID = process.env.BRANDON_CHAT_ID;
 
+// Startup env validation
+(async function validateStartup() {
+  const required = ['CONTROL_PLANE_URL', 'PETER_TELEGRAM_TOKEN', 'BRANDON_CHAT_ID', 'GITHUB_TOKEN', 'GITHUB_OWNER'];
+  const missing = required.filter(k => !process.env[k]);
+  if (missing.length > 0) {
+    process.stderr.write(`[merge-worker] FATAL: missing required env vars: ${missing.join(', ')}\n`);
+    process.exit(1);
+  }
+
+  process.stdout.write(`[merge-worker] startup cwd=${process.cwd()} CONTROL_PLANE_URL=${CONTROL_PLANE_URL}\n`);
+
+  try {
+    const res = await fetch('https://api.github.com/user', {
+      headers: { 'Authorization': `Bearer ${GITHUB_TOKEN}`, 'Accept': 'application/vnd.github+json' },
+      timeout: 10000
+    });
+    if (!res.ok) {
+      process.stderr.write(`[merge-worker] FATAL: GitHub token invalid (HTTP ${res.status})\n`);
+      process.exit(1);
+    }
+    const body = await res.json();
+    process.stdout.write(`[merge-worker] authenticated as GitHub user: ${body.login}\n`);
+  } catch (err) {
+    process.stderr.write(`[merge-worker] FATAL: GitHub auth check failed: ${err.message}\n`);
+    process.exit(1);
+  }
+})().then(startWorker);
+
 const DEPLOY_HOOKS = {
   'review-responder': process.env.DEPLOY_HOOK_REVIEW_RESPONDER,
   'airbnb-optimiser': process.env.DEPLOY_HOOK_AIRBNB,
@@ -159,5 +187,7 @@ async function pollOnce() {
   }
 }
 
-setInterval(pollOnce, 30000);
-pollOnce();
+function startWorker() {
+  setInterval(pollOnce, 30000);
+  pollOnce();
+}

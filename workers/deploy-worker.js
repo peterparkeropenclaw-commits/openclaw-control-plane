@@ -5,6 +5,17 @@ const fetch = require('node-fetch');
 
 const CONTROL_PLANE_URL = process.env.CONTROL_PLANE_URL || 'http://localhost:3210';
 
+// Startup env validation
+(function validateStartup() {
+  const required = ['CONTROL_PLANE_URL', 'PETER_TELEGRAM_TOKEN', 'BRANDON_CHAT_ID', 'GITHUB_TOKEN'];
+  const missing = required.filter(k => !process.env[k]);
+  if (missing.length > 0) {
+    process.stderr.write(`[deploy-worker] FATAL: missing required env vars: ${missing.join(', ')}\n`);
+    process.exit(1);
+  }
+  process.stdout.write(`[deploy-worker] startup cwd=${process.cwd()} CONTROL_PLANE_URL=${CONTROL_PLANE_URL}\n`);
+})();
+
 function log(line) {
   process.stdout.write(`[deploy-worker] ${line}\n`);
 }
@@ -59,6 +70,17 @@ async function pollOnce() {
         body: JSON.stringify({ deploy_url: CONTROL_PLANE_URL + '/health' })
       });
 
+      // Enqueue QA smoke test
+      await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/actions`, {
+        method: 'POST',
+        timeout: 10000,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action_type: 'qa_smoke_test',
+          payload: { deploy_url: CONTROL_PLANE_URL + '/health', repo: 'control-plane', task_id: claimed.task_id }
+        })
+      }).catch(() => {});
+
       log(`completed ${claimed.id} (no-hook path)`);
       return;
     }
@@ -92,6 +114,17 @@ async function pollOnce() {
             not_before_seconds: 90
           })
         });
+
+        // Enqueue QA smoke test after deploy hook fires
+        await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/actions`, {
+          method: 'POST',
+          timeout: 10000,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action_type: 'qa_smoke_test',
+            payload: { deploy_url: task.deploy_url || '', repo: task.repo, task_id: claimed.task_id }
+          })
+        }).catch(() => {});
       }
 
       log(`completed ${claimed.id}`);

@@ -5,6 +5,17 @@ const fetch = require('node-fetch');
 
 const CONTROL_PLANE_URL = process.env.CONTROL_PLANE_URL || 'http://localhost:3210';
 
+// Startup env validation
+(function validateStartup() {
+  const required = ['CONTROL_PLANE_URL', 'PETER_TELEGRAM_TOKEN', 'BRANDON_CHAT_ID'];
+  const missing = required.filter(k => !process.env[k]);
+  if (missing.length > 0) {
+    process.stderr.write(`[verify-worker] FATAL: missing required env vars: ${missing.join(', ')}\n`);
+    process.exit(1);
+  }
+  process.stdout.write(`[verify-worker] startup cwd=${process.cwd()} CONTROL_PLANE_URL=${CONTROL_PLANE_URL}\n`);
+})();
+
 function log(line) {
   process.stdout.write(`[verify-worker] ${line}\n`);
 }
