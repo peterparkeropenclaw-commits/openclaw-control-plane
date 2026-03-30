@@ -16,7 +16,7 @@ const DEPLOY_HOOKS = {
 };
 
 function log(line) {
-  console.log(`[merge-worker] ${line}`);
+  process.stdout.write(`[merge-worker] ${line}\n`);
 }
 
 async function sendTelegram(text) {

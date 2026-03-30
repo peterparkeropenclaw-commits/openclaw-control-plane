@@ -6,7 +6,7 @@ const fetch = require('node-fetch');
 const CONTROL_PLANE_URL = process.env.CONTROL_PLANE_URL || 'http://localhost:3210';
 
 function log(line) {
-  console.log(`[verify-worker] ${line}`);
+  process.stdout.write(`[verify-worker] ${line}\n`);
 }
 
 async function pollOnce() {

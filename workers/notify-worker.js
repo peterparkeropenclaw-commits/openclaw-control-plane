@@ -8,7 +8,7 @@ const PETER_TELEGRAM_TOKEN = process.env.PETER_TELEGRAM_TOKEN;
 const BRANDON_CHAT_ID = process.env.BRANDON_CHAT_ID;
 
 function log(line) {
-  console.log(`[notify-worker] ${line}`);
+  process.stdout.write(`[notify-worker] ${line}\n`);
 }
 
 function buildMessage(payload = {}) {
