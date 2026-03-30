@@ -246,49 +246,16 @@ app.post('/tasks/:id/deployed', async (req, res) => {
   const updated = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
   await notifyState(updated, 'deployed').catch(() => {});
 
+  // Enqueue verify_deploy via action queue — verify-worker owns verification, not inline code.
+  // Short not_before delay gives Vercel time to propagate; verify-worker retries on failure.
+  enqueueAction({
+    taskId: id,
+    actionType: 'verify_deploy',
+    payload: { deploy_url: updated.deploy_url || '' },
+    notBeforeSeconds: 60
+  });
+
   res.json({ task_id: id, state: 'deployed' });
-
-  // Fire-and-forget deploy verification
-  const taskId = id;
-  (async () => {
-    await new Promise(r => setTimeout(r, 30000));
-    const fresh = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(taskId);
-    if (!fresh || !fresh.deploy_url) return;
-
-    try {
-      const verifyRes = await fetch(fresh.deploy_url, { method: 'HEAD', signal: AbortSignal.timeout(10000) });
-      if (verifyRes.ok) {
-        db.prepare(`UPDATE tasks SET state = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(taskId);
-        db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(
-          taskId, 'deploy_verified', JSON.stringify({ url: fresh.deploy_url, status: verifyRes.status })
-        );
-        const completedTask = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(taskId);
-        await notifyState(completedTask, 'completed').catch(() => {});
-        await sendAlert(
-          fresh.brandon_chat_id || process.env.BRANDON_CHAT_ID,
-          `✅ ${fresh.title} verified live\n${fresh.deploy_url} returning ${verifyRes.status}`
-        ).catch(() => {});
-      } else {
-        db.prepare(`UPDATE tasks SET state = 'blocked', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(taskId);
-        db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(
-          taskId, 'deploy_verification_failed', JSON.stringify({ url: fresh.deploy_url, status: verifyRes.status })
-        );
-        await sendAlert(
-          fresh.brandon_chat_id || process.env.BRANDON_CHAT_ID,
-          `🚨 Deploy verification failed\n${fresh.deploy_url} not returning 200\nTask OC-${taskId} blocked.\nManual check needed.`
-        ).catch(() => {});
-      }
-    } catch (err) {
-      db.prepare(`UPDATE tasks SET state = 'blocked', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(taskId);
-      db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(
-        taskId, 'deploy_verification_failed', JSON.stringify({ url: fresh.deploy_url, error: err.message })
-      );
-      await sendAlert(
-        fresh.brandon_chat_id || process.env.BRANDON_CHAT_ID,
-        `🚨 Deploy verification failed\n${fresh.deploy_url} not returning 200\nTask OC-${taskId} blocked.\nManual check needed.`
-      ).catch(() => {});
-    }
-  })();
 });
 
 
