@@ -4,8 +4,9 @@ require('dotenv').config();
 const express = require('express');
 const db = require('./db');
 const { isValidTransition } = require('./state-machine');
-const { notifyState } = require('./notify');
+const { notifyState, sendAlert } = require('./notify');
 const { startTimeouts } = require('./timeouts');
+const { generateDashboardHTML } = require('./dashboard');
 
 const app = express();
 app.use(express.json());
@@ -16,6 +17,11 @@ const PORT = process.env.PORT || 3210;
 app.post('/tasks', async (req, res) => {
   const { title, repo, origin, brandon_chat_id, discord_channel } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
+
+  const existing = db.prepare(
+    `SELECT id FROM tasks WHERE title = ? AND repo = ? AND created_at > datetime('now', '-60 seconds')`
+  ).get(title, repo || null);
+  if (existing) return res.json({ task_id: existing.id, deduplicated: true });
 
   const id = `OC-${Date.now()}`;
   db.prepare(`
@@ -70,6 +76,55 @@ app.get('/tasks/:id', (req, res) => {
   res.json({ ...task, events });
 });
 
+// POST /tasks/:id/validate-brief
+app.post('/tasks/:id/validate-brief', async (req, res) => {
+  const { id } = req.params;
+  const body = req.body || {};
+
+  const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+
+  const missing = [];
+
+  if (typeof body.objective !== 'string' || body.objective.length < 20) missing.push('objective');
+  if (typeof body.scope !== 'string' || body.scope.length < 1) missing.push('scope');
+  if (typeof body.constraints !== 'string' || body.constraints.length < 1) missing.push('constraints');
+  if (!Array.isArray(body.acceptance_criteria) || body.acceptance_criteria.length < 2) missing.push('acceptance_criteria');
+  if (!Array.isArray(body.verification_steps) || body.verification_steps.length < 1) missing.push('verification_steps');
+  if (typeof body.repo !== 'string' || body.repo.length < 1) missing.push('repo');
+  if (!['low', 'medium', 'high'].includes(body.risk_level)) missing.push('risk_level');
+
+  if (missing.length > 0) {
+    db.prepare(`UPDATE tasks SET state = 'blocked', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+    db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(
+      id, 'brief_rejected', JSON.stringify({ missing })
+    );
+
+    const chatId = task.brandon_chat_id || process.env.BRANDON_CHAT_ID;
+    await sendAlert(
+      chatId,
+      `⚠️ Brief for OC-${id} rejected.\nMissing: ${missing.join(', ')}\nComplete brief before dispatching Builder.`
+    ).catch(() => {});
+
+    return res.status(400).json({ error: `Brief rejected: missing ${missing.join(', ')}` });
+  }
+
+  const briefPayload = JSON.stringify({
+    objective: body.objective,
+    scope: body.scope,
+    constraints: body.constraints,
+    acceptance_criteria: body.acceptance_criteria,
+    verification_steps: body.verification_steps,
+    repo: body.repo,
+    risk_level: body.risk_level
+  });
+
+  db.prepare(`UPDATE tasks SET state = 'contract_written', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+  db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'brief_validated', briefPayload);
+
+  return res.json({ task_id: id, state: 'contract_written', approved: true });
+});
+
 // POST /tasks/:id/pr
 app.post('/tasks/:id/pr', async (req, res) => {
   const { id } = req.params;
@@ -100,6 +155,11 @@ app.post('/tasks/:id/verdict', async (req, res) => {
   const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
   if (!task) return res.status(404).json({ error: 'Task not found' });
 
+  const existingVerdict = db.prepare(
+    `SELECT id FROM events WHERE task_id = ? AND event_type = 'verdict_received' AND created_at > datetime('now', '-5 minutes')`
+  ).get(id);
+  if (existingVerdict) return res.json({ task_id: id, state: task.state, deduplicated: true });
+
   const newState = verdict === 'approved' ? 'review_approved' : 'review_changes_requested';
 
   if (!isValidTransition(task.state, newState)) {
@@ -107,6 +167,7 @@ app.post('/tasks/:id/verdict', async (req, res) => {
   }
 
   db.prepare(`UPDATE tasks SET state = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(newState, id);
+  db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'verdict_received', verdict);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, newState, issues || null);
 
   const updated = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
@@ -123,6 +184,11 @@ app.post('/tasks/:id/deployed', async (req, res) => {
   const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
   if (!task) return res.status(404).json({ error: 'Task not found' });
 
+  const existingDeploy = db.prepare(
+    `SELECT id FROM events WHERE task_id = ? AND event_type = 'deployed' AND created_at > datetime('now', '-60 seconds')`
+  ).get(id);
+  if (existingDeploy) return res.json({ task_id: id, state: task.state, deduplicated: true });
+
   if (!isValidTransition(task.state, 'deployed')) {
     return res.status(400).json({ error: `Invalid transition: ${task.state} → deployed` });
   }
@@ -135,6 +201,48 @@ app.post('/tasks/:id/deployed', async (req, res) => {
   await notifyState(updated, 'deployed').catch(() => {});
 
   res.json({ task_id: id, state: 'deployed' });
+
+  // Fire-and-forget deploy verification
+  const taskId = id;
+  (async () => {
+    await new Promise(r => setTimeout(r, 30000));
+    const fresh = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(taskId);
+    if (!fresh || !fresh.deploy_url) return;
+
+    try {
+      const verifyRes = await fetch(fresh.deploy_url, { method: 'HEAD', signal: AbortSignal.timeout(10000) });
+      if (verifyRes.ok) {
+        db.prepare(`UPDATE tasks SET state = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(taskId);
+        db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(
+          taskId, 'deploy_verified', JSON.stringify({ url: fresh.deploy_url, status: verifyRes.status })
+        );
+        const completedTask = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(taskId);
+        await notifyState(completedTask, 'completed').catch(() => {});
+        await sendAlert(
+          fresh.brandon_chat_id || process.env.BRANDON_CHAT_ID,
+          `✅ ${fresh.title} verified live\n${fresh.deploy_url} returning ${verifyRes.status}`
+        ).catch(() => {});
+      } else {
+        db.prepare(`UPDATE tasks SET state = 'blocked', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(taskId);
+        db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(
+          taskId, 'deploy_verification_failed', JSON.stringify({ url: fresh.deploy_url, status: verifyRes.status })
+        );
+        await sendAlert(
+          fresh.brandon_chat_id || process.env.BRANDON_CHAT_ID,
+          `🚨 Deploy verification failed\n${fresh.deploy_url} not returning 200\nTask OC-${taskId} blocked.\nManual check needed.`
+        ).catch(() => {});
+      }
+    } catch (err) {
+      db.prepare(`UPDATE tasks SET state = 'blocked', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(taskId);
+      db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(
+        taskId, 'deploy_verification_failed', JSON.stringify({ url: fresh.deploy_url, error: err.message })
+      );
+      await sendAlert(
+        fresh.brandon_chat_id || process.env.BRANDON_CHAT_ID,
+        `🚨 Deploy verification failed\n${fresh.deploy_url} not returning 200\nTask OC-${taskId} blocked.\nManual check needed.`
+      ).catch(() => {});
+    }
+  })();
 });
 
 // POST /events
@@ -147,6 +255,16 @@ app.post('/events', (req, res) => {
 
   const result = db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(task_id, event_type, payload ? String(payload) : null);
   res.json({ event_id: result.lastInsertRowid });
+});
+
+// GET /dashboard
+app.get('/dashboard', (req, res) => {
+  const filter = req.query.filter || 'active';
+  const sort = req.query.sort || 'age';
+  const tasks = db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all();
+  const events = db.prepare('SELECT * FROM events ORDER BY created_at ASC').all();
+  res.setHeader('Content-Type', 'text/html');
+  res.send(generateDashboardHTML(tasks, events, filter, sort));
 });
 
 // GET /health
