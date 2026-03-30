@@ -53,7 +53,12 @@ function enqueueAction({ taskId, actionType, payload, notBeforeSeconds } = {}) {
 
 // POST /tasks
 app.post('/tasks', async (req, res) => {
-  const { title, repo, origin, brandon_chat_id, discord_channel } = req.body;
+  const {
+    title, repo, origin, brandon_chat_id,
+    // Phase 1 router fields
+    task_type, briefing, constraints, acceptance_criteria,
+    verification_steps, base_branch, risk_level,
+  } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
 
   const existing = db.prepare(
@@ -63,9 +68,19 @@ app.post('/tasks', async (req, res) => {
 
   const id = `OC-${Date.now()}`;
   db.prepare(`
-    INSERT INTO tasks (id, title, repo, origin, brandon_chat_id, discord_channel, state)
-    VALUES (?, ?, ?, ?, ?, ?, 'brief_received')
-  `).run(id, title, repo || null, origin || null, brandon_chat_id || null, discord_channel || null);
+    INSERT INTO tasks (id, title, repo, origin, brandon_chat_id, state,
+      task_type, briefing, constraints, acceptance_criteria, verification_steps, base_branch, risk_level)
+    VALUES (?, ?, ?, ?, ?, 'brief_received', ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, title, repo || null, origin || null, brandon_chat_id || null,
+    task_type || 'build',
+    briefing || null,
+    constraints || null,
+    typeof acceptance_criteria === 'string' ? acceptance_criteria : JSON.stringify(acceptance_criteria || []),
+    typeof verification_steps === 'string' ? verification_steps : JSON.stringify(verification_steps || []),
+    base_branch || 'main',
+    risk_level || 'low',
+  );
 
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'created', null);
 
