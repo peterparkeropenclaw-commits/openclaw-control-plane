@@ -5,6 +5,19 @@ const fetch = require('node-fetch');
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const DEFAULT_CHAT = process.env.BRANDON_CHAT_ID;
 
+// Suppress duplicate alerts for the same task+state within this window (ms).
+// Prevents spam when Reviewer Bot posts multiple comments or verdict re-fires.
+const DEDUP_WINDOW_MS = 4 * 60 * 60 * 1000; // 4 hours
+const _alerted = new Map(); // key: `${taskId}:${state}` → timestamp
+
+function isDuplicate(taskId, state) {
+  const key = `${taskId}:${state}`;
+  const last = _alerted.get(key);
+  if (last && Date.now() - last < DEDUP_WINDOW_MS) return true;
+  _alerted.set(key, Date.now());
+  return false;
+}
+
 async function sendTelegram(chatId, text) {
   const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
   await fetch(url, {
@@ -16,6 +29,16 @@ async function sendTelegram(chatId, text) {
 
 async function notifyState(task, newState, extra) {
   const chatId = task.brandon_chat_id || DEFAULT_CHAT;
+
+  // States that must fire exactly once per task; subsequent calls within DEDUP_WINDOW_MS are dropped.
+  const deduplicatedStates = new Set([
+    'review_changes_requested',
+    'blocked',
+    'escalated',
+  ]);
+
+  if (deduplicatedStates.has(newState) && isDuplicate(task.id, newState)) return;
+
   let text;
 
   switch (newState) {
