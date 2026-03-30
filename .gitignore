@@ -5,3 +5,4 @@ node_modules/
 # SQLite WAL/SHM files
 *.db-shm
 *.db-wal
+package-lock.json
