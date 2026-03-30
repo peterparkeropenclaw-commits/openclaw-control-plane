@@ -282,6 +282,10 @@ app.post('/tasks/:id/archive', async (req, res) => {
     return res.status(400).json({ error: `Task is already in terminal state: ${task.state}` });
   }
 
+  if (!isValidTransition(task.state, 'archived')) {
+    return res.status(400).json({ error: `Invalid transition: ${task.state} → archived` });
+  }
+
   db.prepare(`UPDATE tasks SET state = 'archived', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'archived', reason ? String(reason) : null);
 

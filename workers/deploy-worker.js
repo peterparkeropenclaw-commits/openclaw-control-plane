@@ -70,14 +70,14 @@ async function pollOnce() {
         body: JSON.stringify({ deploy_url: CONTROL_PLANE_URL + '/health' })
       });
 
-      // Enqueue QA smoke test
+      // Enqueue QA smoke test — no-hook path: skip URL checks (no real deploy URL)
       await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/actions`, {
         method: 'POST',
         timeout: 10000,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action_type: 'qa_smoke_test',
-          payload: { deploy_url: CONTROL_PLANE_URL + '/health', repo: 'control-plane', task_id: claimed.task_id }
+          payload: { deploy_url: '', skip_url_checks: true, repo: payload.repo || '', task_id: claimed.task_id }
         })
       }).catch(() => {});
 

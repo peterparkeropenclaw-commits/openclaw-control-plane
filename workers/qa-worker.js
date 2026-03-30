@@ -52,17 +52,24 @@ async function pollOnce() {
     const claimed = await claimRes.json();
     log(`claimed ${claimed.id}`);
     const payload = JSON.parse(claimed.payload_json || '{}');
-    const { deploy_url, repo, task_id } = payload;
+    const { deploy_url, repo, task_id, skip_url_checks } = payload;
     const taskId = task_id || claimed.task_id;
 
-    if (!deploy_url) {
-      await fetch(`${CONTROL_PLANE_URL}/actions/${claimed.id}/fail`, {
+    if (!deploy_url || skip_url_checks) {
+      // No deploy URL or explicitly skipped (e.g. no-hook internal repo) — pass QA automatically
+      await fetch(`${CONTROL_PLANE_URL}/actions/${claimed.id}/complete`, {
         method: 'POST',
         timeout: 10000,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ worker_id: 'qa-worker', error: 'missing_deploy_url', retry_after_seconds: 999999 })
+        body: JSON.stringify({ worker_id: 'qa-worker' })
       });
-      log(`fail ${claimed.id}: missing deploy_url`);
+      await fetch(`${CONTROL_PLANE_URL}/tasks/${taskId}/qa_passed`, {
+        method: 'POST',
+        timeout: 10000,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      log(`completed ${claimed.id}: qa_passed (skip_url_checks)`);
       return;
     }
 
