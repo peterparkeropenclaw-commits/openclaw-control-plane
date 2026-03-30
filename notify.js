@@ -48,15 +48,21 @@ async function notifyState(task, newState, extra) {
     case 'builder_dispatched':
       text = `🔨 Builder spawned on ${task.title}\nETA ~10 minutes.`;
       break;
-    case 'pr_opened':
-      text = `📬 PR #${task.pr_number} open on ${task.repo}.\nReviewer Bot reviewing now.`;
+    case 'pr_opened': {
+      const prRef = task.pr_number ? `PR #${task.pr_number}` : `task ${task.id}`;
+      text = `📬 ${prRef} open on ${task.repo}.\nReviewer Bot reviewing now.`;
       break;
-    case 'review_approved':
-      text = `✅ PR #${task.pr_number} approved.\nMerging and deploying now.`;
+    }
+    case 'review_approved': {
+      const prRef = task.pr_number ? `PR #${task.pr_number}` : `task ${task.id}`;
+      text = `✅ ${prRef} approved.\nMerging and deploying now.`;
       break;
-    case 'review_changes_requested':
-      text = `⚠️ PR #${task.pr_number} needs changes:\n${extra && extra.issues ? extra.issues : ''}\nSpawning Builder to fix.`;
+    }
+    case 'review_changes_requested': {
+      const prRef = task.pr_number ? `PR #${task.pr_number}` : `task ${task.id}`;
+      text = `⚠️ ${prRef} needs changes:\n${extra && extra.issues ? extra.issues : ''}\nSpawning Builder to fix.`;
       break;
+    }
     case 'deployed':
       text = `🚀 ${task.title} is live.\n${task.deploy_url}`;
       break;

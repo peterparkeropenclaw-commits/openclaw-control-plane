@@ -38,7 +38,8 @@ function buildMessage(payload = {}) {
   }
 
   if (message_type === 'changes_requested') {
-    return `⚠️ PR #${pr_number} needs changes.\n[${task_id}] — Builder fix required.`;
+    const prRef = pr_number && pr_number !== 'null' ? `PR #${pr_number}` : `task ${task_id}`;
+    return `⚠️ ${prRef} needs changes.\n[${task_id}] — Builder fix required.`;
   }
 
   if (message_type === 'task_blocked') {

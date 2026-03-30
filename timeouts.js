@@ -60,7 +60,7 @@ async function runTimeoutChecks() {
       if (!hasRecentEscalation(task.id, reason)) {
         recordEscalation(task.id, reason);
         await sendAlert(task.brandon_chat_id || BRANDON_CHAT,
-          `⏰ PR #${task.pr_number} on ${task.repo} has had no review in 10+ minutes. Re-triggering Reviewer Bot.`);
+          `⏰ ${task.pr_number ? `PR #${task.pr_number}` : `Task ${task.id}`} on ${task.repo} has had no review in 10+ minutes. Re-triggering Reviewer Bot.`);
         await postGitHubComment(task.repo, task.pr_number, '@openclawreviewer-a11y please review this PR');
       }
     }
