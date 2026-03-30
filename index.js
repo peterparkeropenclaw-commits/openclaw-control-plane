@@ -121,6 +121,17 @@ app.get('/tasks/active', (req, res) => {
   res.json(tasks);
 });
 
+// GET /tasks/by-state/:state — returns all tasks with the given state, ordered by created_at DESC
+app.get('/tasks/by-state/:state', (req, res) => {
+  const state = req.params.state;
+  const tasks = db.prepare(`
+    SELECT * FROM tasks
+    WHERE state = ?
+    ORDER BY created_at DESC
+  `).all(state);
+  res.json(tasks);
+});
+
 // GET /tasks/:id
 app.get('/tasks/:id', (req, res) => {
   const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(req.params.id);
