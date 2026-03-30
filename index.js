@@ -179,10 +179,14 @@ app.post('/tasks/:id/pr', async (req, res) => {
     .run(pr_number || null, pr_url || null, id);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'pr_opened', pr_url || null);
 
-  const updated = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
-  await notifyState(updated, 'pr_opened').catch(() => {});
+  // Auto-advance to review_pending immediately — Reviewer Bot will fire verdict against this state
+  db.prepare(`UPDATE tasks SET state = 'review_pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+  db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'review_pending', null);
 
-  res.json({ task_id: id, state: 'pr_opened', pr_number: updated.pr_number, pr_url: updated.pr_url });
+  const updated = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
+  await notifyState(updated, 'review_pending').catch(() => {});
+
+  res.json({ task_id: id, state: 'review_pending', pr_number: updated.pr_number, pr_url: updated.pr_url });
 });
 
 // POST /tasks/:id/verdict

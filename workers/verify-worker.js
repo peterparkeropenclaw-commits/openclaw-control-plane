@@ -20,17 +20,22 @@ function log(line) {
   process.stdout.write(`[verify-worker] ${line}\n`);
 }
 
+function fetchWithTimeout(url, options = {}, ms = 10000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 async function pollOnce() {
   try {
-    const pendingRes = await fetch(`${CONTROL_PLANE_URL}/actions/pending`, { timeout: 10000 });
+    const pendingRes = await fetchWithTimeout(`${CONTROL_PLANE_URL}/actions/pending`);
     if (!pendingRes.ok) return;
     const actions = await pendingRes.json();
     const action = actions.find(a => a.action_type === 'verify_deploy' && a.status === 'pending');
     if (!action) return;
 
-    const claimRes = await fetch(`${CONTROL_PLANE_URL}/actions/${action.id}/claim`, {
+    const claimRes = await fetchWithTimeout(`${CONTROL_PLANE_URL}/actions/${action.id}/claim`, {
       method: 'POST',
-      timeout: 10000,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ worker_id: 'verify-worker' })
     });
@@ -46,7 +51,7 @@ async function pollOnce() {
     let deploy_url = payload.deploy_url || '';
 
     if (!deploy_url) {
-      const taskRes = await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}`, { timeout: 10000 });
+      const taskRes = await fetchWithTimeout(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}`);
       if (taskRes.ok) {
         const task = await taskRes.json();
         deploy_url = task.deploy_url || '';
@@ -54,9 +59,8 @@ async function pollOnce() {
     }
 
     if (!deploy_url) {
-      await fetch(`${CONTROL_PLANE_URL}/actions/${claimed.id}/fail`, {
+      await fetchWithTimeout(`${CONTROL_PLANE_URL}/actions/${claimed.id}/fail`, {
         method: 'POST',
-        timeout: 10000,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ worker_id: 'verify-worker', error: 'missing_deploy_url', retry_after_seconds: 999999 })
       });
@@ -65,25 +69,22 @@ async function pollOnce() {
     }
 
     try {
-      const headRes = await fetch(deploy_url, { method: 'HEAD', timeout: 10000, redirect: 'follow' });
+      const headRes = await fetchWithTimeout(deploy_url, { method: 'HEAD', redirect: 'follow' }, 15000);
       if (headRes.status >= 200 && headRes.status < 400) {
-        await fetch(`${CONTROL_PLANE_URL}/actions/${claimed.id}/complete`, {
-        method: 'POST',
-        timeout: 10000,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ worker_id: 'verify-worker' })
-      });
-
-        await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/state`, {
+        await fetchWithTimeout(`${CONTROL_PLANE_URL}/actions/${claimed.id}/complete`, {
           method: 'POST',
-          timeout: 10000,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ worker_id: 'verify-worker' })
+        });
+
+        await fetchWithTimeout(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/state`, {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ state: 'completed', actor: 'verify-worker', note: 'deploy verified' })
         });
 
-        await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/actions`, {
+        await fetchWithTimeout(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/actions`, {
           method: 'POST',
-          timeout: 10000,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action_type: 'notify_telegram',
@@ -95,17 +96,15 @@ async function pollOnce() {
         return;
       }
 
-      await fetch(`${CONTROL_PLANE_URL}/actions/${claimed.id}/fail`, {
+      await fetchWithTimeout(`${CONTROL_PLANE_URL}/actions/${claimed.id}/fail`, {
         method: 'POST',
-        timeout: 10000,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ worker_id: 'verify-worker', error: `HTTP ${headRes.status}`, retry_after_seconds: 60 })
       });
       log(`fail ${claimed.id}`);
     } catch (err) {
-      await fetch(`${CONTROL_PLANE_URL}/actions/${claimed.id}/fail`, {
+      await fetchWithTimeout(`${CONTROL_PLANE_URL}/actions/${claimed.id}/fail`, {
         method: 'POST',
-        timeout: 10000,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ worker_id: 'verify-worker', error: err.message, retry_after_seconds: 60 })
       });
