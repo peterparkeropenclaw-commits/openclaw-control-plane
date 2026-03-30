@@ -8,6 +8,14 @@ const { notifyState, sendAlert } = require('./notify');
 const { startTimeouts } = require('./timeouts');
 const { generateDashboardHTML } = require('./dashboard');
 
+
+function fetchWithTimeout(url, options = {}, ms = 10000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer));
+}
+
 const app = express();
 app.use(express.json());
 
@@ -347,14 +355,13 @@ app.post('/tasks/:id/validate-repo', async (req, res) => {
   if (!REVIEWER_TUNNEL_URL) return res.status(500).json({ error: 'REVIEWER_TUNNEL_URL not configured' });
 
   try {
-    const hooksRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${task.repo}/hooks`, {
+      const hooksRes = await fetchWithTimeout(`https://api.github.com/repos/${GITHUB_OWNER}/${task.repo}/hooks`, {
       headers: {
         'Accept': 'application/vnd.github+json',
         'Authorization': `Bearer ${GITHUB_TOKEN}`,
         'X-GitHub-Api-Version': '2022-11-28'
-      },
-      timeout: 10000
-    });
+      }
+    }, 10000);
 
     if (!hooksRes.ok) {
       return res.status(502).json({ error: `GitHub API error: ${hooksRes.status}` });
@@ -394,7 +401,7 @@ app.get('/health/full', async (req, res) => {
 
   async function checkReviewerBot() {
     try {
-      const r = await fetch('http://localhost:3205/health', { method: 'HEAD', timeout: timeout10s });
+      const r = await fetchWithTimeout('http://localhost:3205/health', { method: 'HEAD', }, 10000);
       return r.status === 200 ? 'PASS' : `FAIL:HTTP_${r.status}`;
     } catch (e) { return `FAIL:${e.message}`; }
   }
@@ -418,7 +425,7 @@ app.get('/health/full', async (req, res) => {
   async function checkCloudflareTunnel() {
     if (!REVIEWER_TUNNEL_URL) return 'not_configured';
     try {
-      const r = await fetch(REVIEWER_TUNNEL_URL, { method: 'HEAD', timeout: timeout10s });
+      const r = await fetchWithTimeout(REVIEWER_TUNNEL_URL, { method: 'HEAD' }, 10000);
       return r.status < 500 ? 'PASS' : `FAIL:HTTP_${r.status}`;
     } catch (e) { return `FAIL:${e.message}`; }
   }
@@ -426,10 +433,9 @@ app.get('/health/full', async (req, res) => {
   async function checkGithubToken() {
     if (!GITHUB_TOKEN) return 'FAIL:token_not_set';
     try {
-      const r = await fetch('https://api.github.com/user', {
-        headers: { 'Authorization': `Bearer ${GITHUB_TOKEN}`, 'Accept': 'application/vnd.github+json' },
-        timeout: timeout10s
-      });
+      const r = await fetchWithTimeout('https://api.github.com/user', {
+        headers: { 'Authorization': `Bearer ${GITHUB_TOKEN}`, 'Accept': 'application/vnd.github+json' }
+      }, 10000);
       if (!r.ok) return `FAIL:HTTP_${r.status}`;
       const body = await r.json();
       return body.login ? 'PASS' : 'FAIL:no_login';
@@ -439,12 +445,11 @@ app.get('/health/full', async (req, res) => {
   async function checkTelegram() {
     if (!PETER_TELEGRAM_TOKEN || !BRANDON_CHAT_ID) return 'FAIL:token_or_chat_not_set';
     try {
-      const r = await fetch(`https://api.telegram.org/bot${PETER_TELEGRAM_TOKEN}/sendMessage`, {
+      const r = await fetchWithTimeout(`https://api.telegram.org/bot${PETER_TELEGRAM_TOKEN}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: BRANDON_CHAT_ID, text: '[health-check] ping', disable_notification: true }),
-        timeout: timeout10s
-      });
+        body: JSON.stringify({ chat_id: BRANDON_CHAT_ID, text: '[health-check] ping', disable_notification: true })
+      }, 10000);
       const body = await r.json();
       return body.ok ? 'PASS' : `FAIL:${JSON.stringify(body.description || body)}`;
     } catch (e) { return `FAIL:${e.message}`; }
