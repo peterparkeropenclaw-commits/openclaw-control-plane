@@ -24,6 +24,7 @@ db.exec(`
     discord_channel TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_progress_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     completed_at DATETIME
   );
 

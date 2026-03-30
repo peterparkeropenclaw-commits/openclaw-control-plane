@@ -87,7 +87,7 @@ app.post('/tasks/:id/state', async (req, res) => {
     return res.status(400).json({ error: `Invalid transition: ${task.state} → ${state}` });
   }
 
-  db.prepare(`UPDATE tasks SET state = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(state, id);
+  db.prepare(`UPDATE tasks SET state = ?, updated_at = CURRENT_TIMESTAMP, last_progress_at = CURRENT_TIMESTAMP WHERE id = ?`).run(state, id);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, state, payload ? String(payload) : null);
 
   const updated = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
@@ -133,7 +133,7 @@ app.post('/tasks/:id/validate-brief', async (req, res) => {
   if (!['low', 'medium', 'high'].includes(body.risk_level)) missing.push('risk_level');
 
   if (missing.length > 0) {
-    db.prepare(`UPDATE tasks SET state = 'blocked', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+    db.prepare(`UPDATE tasks SET state = 'blocked', updated_at = CURRENT_TIMESTAMP, last_progress_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
     db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(
       id, 'brief_rejected', JSON.stringify({ missing })
     );
@@ -157,7 +157,7 @@ app.post('/tasks/:id/validate-brief', async (req, res) => {
     risk_level: body.risk_level
   });
 
-  db.prepare(`UPDATE tasks SET state = 'contract_written', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+  db.prepare(`UPDATE tasks SET state = 'contract_written', updated_at = CURRENT_TIMESTAMP, last_progress_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'brief_validated', briefPayload);
 
   return res.json({ task_id: id, state: 'contract_written', approved: true });
@@ -175,12 +175,12 @@ app.post('/tasks/:id/pr', async (req, res) => {
     return res.status(400).json({ error: `Invalid transition: ${task.state} → pr_opened` });
   }
 
-  db.prepare(`UPDATE tasks SET pr_number = ?, pr_url = ?, state = 'pr_opened', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+  db.prepare(`UPDATE tasks SET pr_number = ?, pr_url = ?, state = 'pr_opened', updated_at = CURRENT_TIMESTAMP, last_progress_at = CURRENT_TIMESTAMP WHERE id = ?`)
     .run(pr_number || null, pr_url || null, id);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'pr_opened', pr_url || null);
 
   // Auto-advance to review_pending immediately — Reviewer Bot will fire verdict against this state
-  db.prepare(`UPDATE tasks SET state = 'review_pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+  db.prepare(`UPDATE tasks SET state = 'review_pending', updated_at = CURRENT_TIMESTAMP, last_progress_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'review_pending', null);
 
   const updated = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
@@ -208,7 +208,7 @@ app.post('/tasks/:id/verdict', async (req, res) => {
     return res.status(400).json({ error: `Invalid transition: ${task.state} → ${newState}` });
   }
 
-  db.prepare(`UPDATE tasks SET state = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(newState, id);
+  db.prepare(`UPDATE tasks SET state = ?, updated_at = CURRENT_TIMESTAMP, last_progress_at = CURRENT_TIMESTAMP WHERE id = ?`).run(newState, id);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'verdict_received', verdict);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, newState, issues || null);
 
@@ -255,7 +255,7 @@ app.post('/tasks/:id/deployed', async (req, res) => {
     return res.status(400).json({ error: `Invalid transition: ${task.state} → deployed` });
   }
 
-  db.prepare(`UPDATE tasks SET deploy_url = ?, state = 'deployed', updated_at = CURRENT_TIMESTAMP, completed_at = CURRENT_TIMESTAMP WHERE id = ?`)
+  db.prepare(`UPDATE tasks SET deploy_url = ?, state = 'deployed', updated_at = CURRENT_TIMESTAMP, last_progress_at = CURRENT_TIMESTAMP, completed_at = CURRENT_TIMESTAMP WHERE id = ?`)
     .run(deploy_url || null, id);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'deployed', deploy_url || null);
 
@@ -290,7 +290,7 @@ app.post('/tasks/:id/archive', async (req, res) => {
     return res.status(400).json({ error: `Invalid transition: ${task.state} → archived` });
   }
 
-  db.prepare(`UPDATE tasks SET state = 'archived', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+  db.prepare(`UPDATE tasks SET state = 'archived', updated_at = CURRENT_TIMESTAMP, last_progress_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'archived', reason ? String(reason) : null);
 
   res.json({ task_id: id, state: 'archived' });
@@ -308,12 +308,12 @@ app.post('/tasks/:id/qa_passed', async (req, res) => {
   }
 
   if (task.state === 'deployed') {
-    db.prepare(`UPDATE tasks SET state = 'qa_passed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+    db.prepare(`UPDATE tasks SET state = 'qa_passed', updated_at = CURRENT_TIMESTAMP, last_progress_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
     db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'qa_passed', null);
   }
 
   // Transition to completed
-  db.prepare(`UPDATE tasks SET state = 'completed', updated_at = CURRENT_TIMESTAMP, completed_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+  db.prepare(`UPDATE tasks SET state = 'completed', updated_at = CURRENT_TIMESTAMP, last_progress_at = CURRENT_TIMESTAMP, completed_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'completed', 'qa_passed');
 
   const updated = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
@@ -334,7 +334,7 @@ app.post('/tasks/:id/qa_failed', async (req, res) => {
     return res.status(400).json({ error: `Expected deployed state, got: ${task.state}` });
   }
 
-  db.prepare(`UPDATE tasks SET state = 'qa_failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+  db.prepare(`UPDATE tasks SET state = 'qa_failed', updated_at = CURRENT_TIMESTAMP, last_progress_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'qa_failed', failing_checks ? JSON.stringify(failing_checks) : null);
 
   const updated = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
@@ -644,7 +644,7 @@ app.post('/actions/:id/fail', (req, res) => {
 
     const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(action.task_id);
     if (task && isValidTransition(task.state, 'blocked')) {
-      db.prepare(`UPDATE tasks SET state = 'blocked', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(task.id);
+      db.prepare(`UPDATE tasks SET state = 'blocked', updated_at = CURRENT_TIMESTAMP, last_progress_at = CURRENT_TIMESTAMP WHERE id = ?`).run(task.id);
       db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(
         task.id, 'blocked', 'action_failed_max_attempts'
       );
