@@ -270,7 +270,7 @@ app.get('/dashboard', (req, res) => {
 // GET /health
 app.get('/health', (req, res) => {
   const row = db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE state NOT IN ('completed', 'blocked')`).get();
-  res.json({ status: 'ok', uptime: process.uptime(), tasks_active: row.count });
+  res.json({ status: 'ok', uptime: process.uptime(), tasks_active: row.count, autonomy_engine: true });
 });
 
 app.listen(PORT, () => {
