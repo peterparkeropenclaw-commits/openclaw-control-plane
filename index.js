@@ -164,6 +164,9 @@ app.post('/tasks/:id/validate-brief', async (req, res) => {
 });
 
 // POST /tasks/:id/pr
+// Idempotent: if PR data is already set and state has advanced past pr_opened, just update
+// pr_number/pr_url without re-running the state transition. This prevents 400 errors when
+// Builder retries /pr after a state race or retry.
 app.post('/tasks/:id/pr', async (req, res) => {
   const { id } = req.params;
   const { pr_number, pr_url } = req.body;
@@ -171,8 +174,22 @@ app.post('/tasks/:id/pr', async (req, res) => {
   const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
   if (!task) return res.status(404).json({ error: 'Task not found' });
 
+  const terminalStates = ['completed', 'blocked', 'archived', 'failed'];
+  if (terminalStates.includes(task.state)) {
+    return res.status(400).json({ error: `Task is in terminal state: ${task.state}` });
+  }
+
+  // Idempotent path: state has already advanced past pr_opened — just attach PR data if missing
   if (!isValidTransition(task.state, 'pr_opened')) {
-    return res.status(400).json({ error: `Invalid transition: ${task.state} → pr_opened` });
+    const needsUpdate = (pr_number && !task.pr_number) || (pr_url && !task.pr_url);
+    if (needsUpdate) {
+      db.prepare(`UPDATE tasks SET pr_number = COALESCE(pr_number, ?), pr_url = COALESCE(pr_url, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+        .run(pr_number || null, pr_url || null, id);
+      db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`)
+        .run(id, 'pr_attached', pr_url || null);
+    }
+    const updated = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
+    return res.json({ task_id: id, state: updated.state, pr_number: updated.pr_number, pr_url: updated.pr_url, idempotent: true });
   }
 
   db.prepare(`UPDATE tasks SET pr_number = ?, pr_url = ?, state = 'pr_opened', updated_at = CURRENT_TIMESTAMP, last_progress_at = CURRENT_TIMESTAMP WHERE id = ?`)
