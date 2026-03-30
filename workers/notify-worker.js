@@ -38,7 +38,7 @@ function buildMessage(payload = {}) {
     return `⚠️ Merge failed for ${task_id}:\n${error}`;
   }
 
-  return message_text || 'No message';
+  return message_text || `Task ${task_id || 'unknown'} status update`;
 }
 
 async function pollOnce() {
