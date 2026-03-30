@@ -64,17 +64,15 @@ function escHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-function generateDashboardHTML(allTasks, allEvents, filter, sort) {
+function generateDashboardHTML(allTasks, allEvents, filter, sort, summary = null) {
   const now = Date.now();
 
-  // Build events map grouped by task_id
   const eventsMap = {};
   for (const ev of allEvents) {
     if (!eventsMap[ev.task_id]) eventsMap[ev.task_id] = [];
     eventsMap[ev.task_id].push(ev);
   }
 
-  // Filter
   let tasks = allTasks;
   if (filter === 'active') {
     tasks = allTasks.filter(t => ACTIVE_STATES.has(t.state) && !BLOCKED_STATES.has(t.state));
@@ -84,13 +82,11 @@ function generateDashboardHTML(allTasks, allEvents, filter, sort) {
     tasks = allTasks.filter(t => BLOCKED_STATES.has(t.state));
   }
 
-  // Sort
   if (sort === 'state') {
     tasks = [...tasks].sort((a, b) => a.state.localeCompare(b.state));
   } else if (sort === 'created') {
     tasks = [...tasks].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   } else {
-    // age: most recently updated first (youngest age in state = updated most recently)
     tasks = [...tasks].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
   }
 
@@ -174,6 +170,16 @@ function generateDashboardHTML(allTasks, allEvents, filter, sort) {
     ? `<tr><td colspan="9" style="text-align:center;color:#888;padding:2rem">No tasks found.</td></tr>`
     : '';
 
+  const summaryCounts = summary && summary.counts_by_state
+    ? Object.entries(summary.counts_by_state)
+      .map(([state, count]) => `<span class="summary-pill"><strong>${escHtml(state)}</strong>: ${escHtml(count)}</span>`)
+      .join('')
+    : '<span class="summary-empty">No active tasks.</span>';
+
+  const oldestActive = summary && summary.oldest_active_seconds != null
+    ? formatAge(summary.oldest_active_seconds * 1000)
+    : '—';
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -208,6 +214,59 @@ function generateDashboardHTML(allTasks, allEvents, filter, sort) {
     .sort-link { color: #555; text-decoration: none; margin: 0 0.25rem; }
     .sort-link:hover { text-decoration: underline; }
     .sort-active { font-weight: 700; color: #1a1a1a; }
+    .status-block {
+      background: #fff;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .status-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 0.75rem;
+      background: #fafafa;
+    }
+    .status-label {
+      display: block;
+      color: #666;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.25rem;
+    }
+    .status-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+    .summary-pills {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .summary-pill {
+      display: inline-flex;
+      gap: 0.25rem;
+      align-items: center;
+      padding: 0.35rem 0.6rem;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #3730a3;
+      border: 1px solid #c7d2fe;
+      font-size: 0.8rem;
+    }
+    .summary-empty {
+      color: #666;
+      font-style: italic;
+      font-size: 0.85rem;
+    }
     .table-wrap { overflow-x: auto; }
     table.tasks {
       width: 100%;
@@ -286,6 +345,20 @@ function generateDashboardHTML(allTasks, allEvents, filter, sort) {
 <body>
   <h1>🦾 OpenClaw Control Plane</h1>
   <p class="subtitle">Last updated: ${escHtml(timestamp)} · Auto-refreshes every 30s · ${tasks.length} task${tasks.length !== 1 ? 's' : ''} shown</p>
+
+  <div class="status-block">
+    <div class="status-grid">
+      <div class="status-card">
+        <span class="status-label">Active tasks</span>
+        <span class="status-value">${escHtml(summary && summary.total_active != null ? summary.total_active : 0)}</span>
+      </div>
+      <div class="status-card">
+        <span class="status-label">Oldest active</span>
+        <span class="status-value">${escHtml(oldestActive)}</span>
+      </div>
+    </div>
+    <div class="summary-pills">${summaryCounts}</div>
+  </div>
 
   <nav class="tabs">
     ${tabLink('all', 'All')}
