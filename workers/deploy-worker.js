@@ -39,7 +39,9 @@ async function pollOnce() {
       // Mark complete and enqueue verify_deploy against the CP health endpoint as proof of liveness.
       await fetch(`${CONTROL_PLANE_URL}/actions/${claimed.id}/complete`, {
         method: 'POST',
-        timeout: 10000
+        timeout: 10000,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ worker_id: 'deploy-worker' })
       });
 
       await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/state`, {
@@ -65,7 +67,9 @@ async function pollOnce() {
     if (hookRes.ok) {
       await fetch(`${CONTROL_PLANE_URL}/actions/${claimed.id}/complete`, {
         method: 'POST',
-        timeout: 10000
+        timeout: 10000,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ worker_id: 'deploy-worker' })
       });
 
       await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/state`, {
@@ -99,7 +103,7 @@ async function pollOnce() {
       method: 'POST',
       timeout: 10000,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: errorBody })
+      body: JSON.stringify({ worker_id: 'deploy-worker', error: errorBody })
     });
     log(`fail ${claimed.id}`);
   } catch (err) {

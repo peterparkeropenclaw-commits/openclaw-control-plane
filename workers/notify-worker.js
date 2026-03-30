@@ -76,7 +76,9 @@ async function pollOnce() {
     if (notifyRes.ok) {
       await fetch(`${CONTROL_PLANE_URL}/actions/${claimed.id}/complete`, {
         method: 'POST',
-        timeout: 10000
+        timeout: 10000,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ worker_id: 'notify-worker' })
       });
       log(`completed ${claimed.id}`);
       return;
@@ -87,7 +89,7 @@ async function pollOnce() {
       method: 'POST',
       timeout: 10000,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: errorBody })
+      body: JSON.stringify({ worker_id: 'notify-worker', error: errorBody })
     });
     log(`fail ${claimed.id}`);
   } catch (err) {

@@ -60,7 +60,7 @@ async function pollOnce() {
         method: 'POST',
         timeout: 10000,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'task_not_found' })
+        body: JSON.stringify({ worker_id: 'merge-worker', error: 'task_not_found' })
       });
       log(`fail ${claimed.id}`);
       return;
@@ -84,7 +84,7 @@ async function pollOnce() {
         method: 'POST',
         timeout: 10000,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: `invariant_failed: ${reason}`, retry_after_seconds: 999999 })
+        body: JSON.stringify({ worker_id: 'merge-worker', error: `invariant_failed: ${reason}`, retry_after_seconds: 999999 })
       });
 
       await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/state`, {
@@ -120,7 +120,9 @@ async function pollOnce() {
     if (mergeRes.ok) {
       await fetch(`${CONTROL_PLANE_URL}/actions/${claimed.id}/complete`, {
         method: 'POST',
-        timeout: 10000
+        timeout: 10000,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ worker_id: 'merge-worker' })
       });
       await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/state`, {
         method: 'POST',
@@ -149,7 +151,7 @@ async function pollOnce() {
       method: 'POST',
       timeout: 10000,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: errorBody })
+      body: JSON.stringify({ worker_id: 'merge-worker', error: errorBody })
     });
     log(`fail ${claimed.id}`);
   } catch (err) {

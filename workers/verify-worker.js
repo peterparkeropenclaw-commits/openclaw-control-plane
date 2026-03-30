@@ -47,7 +47,7 @@ async function pollOnce() {
         method: 'POST',
         timeout: 10000,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'missing_deploy_url', retry_after_seconds: 999999 })
+        body: JSON.stringify({ worker_id: 'verify-worker', error: 'missing_deploy_url', retry_after_seconds: 999999 })
       });
       log(`fail ${claimed.id}`);
       return;
@@ -57,9 +57,11 @@ async function pollOnce() {
       const headRes = await fetch(deploy_url, { method: 'HEAD', timeout: 10000, redirect: 'follow' });
       if (headRes.status >= 200 && headRes.status < 400) {
         await fetch(`${CONTROL_PLANE_URL}/actions/${claimed.id}/complete`, {
-          method: 'POST',
-          timeout: 10000
-        });
+        method: 'POST',
+        timeout: 10000,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ worker_id: 'verify-worker' })
+      });
 
         await fetch(`${CONTROL_PLANE_URL}/tasks/${claimed.task_id}/state`, {
           method: 'POST',
@@ -86,7 +88,7 @@ async function pollOnce() {
         method: 'POST',
         timeout: 10000,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: `HTTP ${headRes.status}`, retry_after_seconds: 60 })
+        body: JSON.stringify({ worker_id: 'verify-worker', error: `HTTP ${headRes.status}`, retry_after_seconds: 60 })
       });
       log(`fail ${claimed.id}`);
     } catch (err) {
@@ -94,7 +96,7 @@ async function pollOnce() {
         method: 'POST',
         timeout: 10000,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: err.message, retry_after_seconds: 60 })
+        body: JSON.stringify({ worker_id: 'verify-worker', error: err.message, retry_after_seconds: 60 })
       });
       log(`fail ${claimed.id}`);
     }

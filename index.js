@@ -325,9 +325,14 @@ app.post('/actions/:id/claim', (req, res) => {
 // POST /actions/:id/complete
 app.post('/actions/:id/complete', (req, res) => {
   const { id } = req.params;
+  const { worker_id } = req.body || {};
 
   const action = db.prepare(`SELECT * FROM action_queue WHERE id = ?`).get(id);
   if (!action) return res.status(404).json({ error: 'Action not found' });
+  if (action.status !== 'claimed') return res.status(409).json({ error: 'Action is not claimed' });
+  if (worker_id && action.locked_by && action.locked_by !== worker_id) {
+    return res.status(403).json({ error: 'Worker does not own this action' });
+  }
 
   db.prepare(`UPDATE action_queue SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(
@@ -340,11 +345,14 @@ app.post('/actions/:id/complete', (req, res) => {
 // POST /actions/:id/fail
 app.post('/actions/:id/fail', (req, res) => {
   const { id } = req.params;
-  const { error, retry_after_seconds } = req.body || {};
+  const { error, retry_after_seconds, worker_id } = req.body || {};
 
   const action = db.prepare(`SELECT * FROM action_queue WHERE id = ?`).get(id);
   if (!action) return res.status(404).json({ error: 'Action not found' });
-
+  if (action.status !== 'claimed') return res.status(409).json({ error: 'Action is not claimed' });
+  if (worker_id && action.locked_by && action.locked_by !== worker_id) {
+    return res.status(403).json({ error: 'Worker does not own this action' });
+  }
   const newAttempts = Number(action.attempts || 0) + 1;
   const maxAttempts = Number(action.max_attempts || 5);
   const lastError = error ? String(error) : 'unknown error';
