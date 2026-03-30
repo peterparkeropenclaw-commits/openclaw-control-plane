@@ -25,7 +25,7 @@ async function sendTelegram(text) {
     method: 'POST',
     timeout: 10000,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: BRANDON_CHAT_ID, text, parse_mode: 'Markdown' })
+    body: JSON.stringify({ chat_id: BRANDON_CHAT_ID, text })
   });
 }
 
