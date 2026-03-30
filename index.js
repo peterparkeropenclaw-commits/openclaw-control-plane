@@ -711,8 +711,12 @@ app.get('/dashboard', (req, res) => {
 
 // GET /health
 app.get('/health', (req, res) => {
+  const row = db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE state NOT IN ('completed', 'blocked', 'archived', 'cancelled', 'abandoned')`).get();
+  res.json({ status: 'ok', uptime: process.uptime(), tasks_active: row.count, autonomy_engine: true });
+});
 
-// [OC-1774900171118] --- Architecture V2 Phase 1: worker_registry, task_results, and worker dispatch endpoints ---
+// [OC-1774900171118] Architecture V2 Phase 1 — worker registry + task results endpoints
+// NOTE: Built using temporary Builder v2 migration carve-out. Router (Phase 2) is not yet the active execution path.
 
 // GET /registry
 app.get('/registry', (req, res) => {
@@ -727,7 +731,7 @@ app.get('/registry/:task_type', (req, res) => {
   res.json(row);
 });
 
-// POST /registry
+// POST /registry — upsert a worker registration
 app.post('/registry', (req, res) => {
   const { task_type, worker_script, model, max_tokens, timeout_seconds, max_attempts, prompt_template, expected_output_fields, routable_states } = req.body;
   if (!task_type || !worker_script) return res.status(400).json({ error: 'task_type and worker_script are required' });
@@ -758,7 +762,7 @@ app.post('/registry', (req, res) => {
   res.json({ ok: true, registry: row });
 });
 
-// POST /tasks/:id/result
+// POST /tasks/:id/result — worker posts evidence-backed result; CP advances state from evidence
 app.post('/tasks/:id/result', async (req, res) => {
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Task not found' });
@@ -834,7 +838,7 @@ app.post('/tasks/:id/result', async (req, res) => {
   return res.status(400).json({ error: `Unknown status value: ${status}` });
 });
 
-// POST /tasks/:id/attempt
+// POST /tasks/:id/attempt — increment attempt count with optional backoff
 app.post('/tasks/:id/attempt', (req, res) => {
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Task not found' });
@@ -847,10 +851,6 @@ app.post('/tasks/:id/attempt', (req, res) => {
     db.prepare('UPDATE tasks SET attempt_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newAttempt, task.id);
   }
   res.json({ ok: true, attempt_count: newAttempt });
-});
-
-  const row = db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE state NOT IN ('completed', 'blocked', 'archived', 'cancelled', 'abandoned')`).get();
-  res.json({ status: 'ok', uptime: process.uptime(), tasks_active: row.count, autonomy_engine: true });
 });
 
 app.listen(PORT, () => {
