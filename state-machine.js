@@ -7,13 +7,14 @@ const TRANSITIONS = {
   build_in_progress: ['pr_opened', 'blocked', 'failed', 'escalated'],
   pr_opened: ['review_pending', 'blocked', 'failed', 'escalated'],
   review_pending: ['review_approved', 'review_changes_requested', 'blocked', 'failed', 'escalated'],
-  review_approved: ['merge_pending', 'blocked', 'failed', 'escalated'],
+  review_approved: ['merge_in_progress', 'merge_pending', 'blocked', 'failed', 'escalated'],
   review_changes_requested: ['builder_dispatched', 'blocked', 'failed', 'escalated'],
+  merge_in_progress: ['merge_pending', 'deploy_in_progress', 'deployed', 'completed', 'blocked', 'failed', 'escalated'],
   merge_pending: ['deployed', 'deploy_in_progress', 'blocked', 'failed', 'escalated'],
-  deploy_in_progress: ['deployed', 'failed', 'blocked', 'escalated'],
+  deploy_in_progress: ['deployed', 'completed', 'blocked', 'failed', 'escalated'],
   deployed: ['completed', 'blocked', 'failed', 'escalated'],
   completed: ['blocked', 'failed', 'escalated'],
-  blocked: ['blocked', 'failed', 'escalated'],
+  blocked: ['review_approved', 'review_pending', 'builder_dispatched', 'blocked', 'failed', 'escalated'],
   failed: ['blocked', 'failed', 'escalated'],
   escalated: ['blocked', 'failed', 'escalated']
 };

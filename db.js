@@ -44,6 +44,25 @@ db.exec(`
     acked_at DATETIME,
     resolved_at DATETIME
   );
+
+  CREATE TABLE IF NOT EXISTS action_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    status TEXT DEFAULT 'pending',
+    attempts INTEGER DEFAULT 0,
+    max_attempts INTEGER DEFAULT 5,
+    not_before DATETIME NULL,
+    locked_at DATETIME NULL,
+    locked_by TEXT NULL,
+    last_error TEXT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_aq_status_notbefore ON action_queue(status, not_before);
+  CREATE INDEX IF NOT EXISTS idx_aq_task ON action_queue(task_id);
 `);
 
 module.exports = db;
