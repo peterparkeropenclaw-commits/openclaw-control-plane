@@ -715,6 +715,38 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), tasks_active: row.count, autonomy_engine: true });
 });
 
+// GET /health/builder
+const http = require('http');
+app.get('/health/builder', (req, res) => {
+  const opts = {
+    hostname: 'localhost',
+    port: 3201,
+    path: '/health',
+    method: 'GET',
+    timeout: 5000
+  };
+  const request = http.request(opts, (resp) => {
+    let data = '';
+    resp.on('data', chunk => { data += chunk; });
+    resp.on('end', () => {
+      try {
+        const json = JSON.parse(data);
+        res.json(json);
+      } catch (e) {
+        res.status(502).json({ error: 'Invalid JSON from builder', detail: e.message });
+      }
+    });
+  });
+  request.on('error', (err) => {
+    res.status(502).json({ error: 'Builder health unreachable', detail: err.message });
+  });
+  request.on('timeout', () => {
+    request.destroy();
+    res.status(504).json({ error: 'Builder health request timed out' });
+  });
+  request.end();
+});
+
 app.listen(PORT, () => {
   startTimeouts();
 });
