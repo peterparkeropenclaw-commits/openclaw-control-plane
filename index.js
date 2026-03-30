@@ -711,6 +711,144 @@ app.get('/dashboard', (req, res) => {
 
 // GET /health
 app.get('/health', (req, res) => {
+
+// [OC-1774900171118] --- Architecture V2 Phase 1: worker_registry, task_results, and worker dispatch endpoints ---
+
+// GET /registry
+app.get('/registry', (req, res) => {
+  const rows = db.prepare('SELECT * FROM worker_registry WHERE active = 1 ORDER BY task_type').all();
+  res.json(rows);
+});
+
+// GET /registry/:task_type
+app.get('/registry/:task_type', (req, res) => {
+  const row = db.prepare('SELECT * FROM worker_registry WHERE task_type = ? AND active = 1').get(req.params.task_type);
+  if (!row) return res.status(404).json({ error: `No active worker registered for task_type: ${req.params.task_type}` });
+  res.json(row);
+});
+
+// POST /registry
+app.post('/registry', (req, res) => {
+  const { task_type, worker_script, model, max_tokens, timeout_seconds, max_attempts, prompt_template, expected_output_fields, routable_states } = req.body;
+  if (!task_type || !worker_script) return res.status(400).json({ error: 'task_type and worker_script are required' });
+  db.prepare(`
+    INSERT INTO worker_registry (task_type, worker_script, model, max_tokens, timeout_seconds, max_attempts, prompt_template, expected_output_fields, routable_states, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(task_type) DO UPDATE SET
+      worker_script = excluded.worker_script,
+      model = excluded.model,
+      max_tokens = excluded.max_tokens,
+      timeout_seconds = excluded.timeout_seconds,
+      max_attempts = excluded.max_attempts,
+      prompt_template = excluded.prompt_template,
+      expected_output_fields = excluded.expected_output_fields,
+      routable_states = excluded.routable_states,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(
+    task_type, worker_script,
+    model || 'gpt-4.1',
+    max_tokens || 16000,
+    timeout_seconds || 300,
+    max_attempts || 3,
+    prompt_template || '{}',
+    typeof expected_output_fields === 'string' ? expected_output_fields : JSON.stringify(expected_output_fields || []),
+    typeof routable_states === 'string' ? routable_states : JSON.stringify(routable_states || [])
+  );
+  const row = db.prepare('SELECT * FROM worker_registry WHERE task_type = ?').get(task_type);
+  res.json({ ok: true, registry: row });
+});
+
+// POST /tasks/:id/result
+app.post('/tasks/:id/result', async (req, res) => {
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+
+  const { status, branch, commit, pr_number, pr_url, changed_files, summary, error, worker_type, spawned_at } = req.body;
+  if (!status) return res.status(400).json({ error: 'status is required' });
+
+  const attempt = (task.attempt_count || 0) + 1;
+
+  db.prepare(`
+    INSERT INTO task_results (task_id, attempt, worker_type, status, result_json, branch, commit_sha, pr_number, pr_url, changed_files, summary, error, spawned_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    task.id, attempt, worker_type || 'build', status,
+    JSON.stringify(req.body),
+    branch || null, commit || null,
+    pr_number ? Number(pr_number) : null,
+    pr_url || null,
+    typeof changed_files === 'string' ? changed_files : JSON.stringify(changed_files || []),
+    summary || null, error || null, spawned_at || null
+  );
+
+  db.prepare('UPDATE tasks SET attempt_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(attempt, task.id);
+  db.prepare('INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)').run(
+    task.id, 'worker_result', JSON.stringify({ status, summary, error, attempt })
+  );
+
+  const cpBase = `http://localhost:${process.env.PORT || 3210}`;
+
+  if (status === 'success') {
+    if (pr_url && pr_number) {
+      db.prepare('UPDATE tasks SET pr_number = ?, pr_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(Number(pr_number), pr_url, task.id);
+      const r = await fetchWithTimeout(`${cpBase}/tasks/${task.id}/state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: 'pr_opened', actor: 'worker', note: summary || 'Worker result: success with PR' })
+      });
+      const d = await r.json();
+      return res.json({ ok: true, state: d.state, attempt });
+    }
+    return res.json({ ok: true, state: task.state, attempt, note: 'success but no pr_url — state not advanced' });
+  }
+
+  const registry = db.prepare('SELECT max_attempts FROM worker_registry WHERE task_type = ?').get(task.task_type || 'build');
+  const maxAttempts = registry ? registry.max_attempts : 3;
+
+  if (status === 'retryable_failure') {
+    if (attempt >= maxAttempts) {
+      await fetchWithTimeout(`${cpBase}/tasks/${task.id}/state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: 'blocked', actor: 'cp', note: `Max retries (${maxAttempts}) reached. Last error: ${error}` })
+      });
+      enqueueAction({ taskId: task.id, actionType: 'notify_telegram', payload: { message_type: 'task_blocked', task_id: task.id, attempts: attempt, error } });
+      return res.json({ ok: true, state: 'blocked', attempt });
+    }
+    const backoffSeconds = Math.pow(2, attempt) * 60;
+    db.prepare("UPDATE tasks SET worker_locked_until = datetime('now', ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(`+${backoffSeconds} seconds`, task.id);
+    return res.json({ ok: true, state: 'retrying', attempt, backoff_seconds: backoffSeconds });
+  }
+
+  if (status === 'non_retryable_failure') {
+    await fetchWithTimeout(`${cpBase}/tasks/${task.id}/state`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state: 'failed', actor: 'cp', note: `Non-retryable failure: ${error}` })
+    });
+    enqueueAction({ taskId: task.id, actionType: 'notify_telegram', payload: { message_type: 'task_blocked', task_id: task.id, attempts: attempt, error } });
+    return res.json({ ok: true, state: 'failed', attempt });
+  }
+
+  return res.status(400).json({ error: `Unknown status value: ${status}` });
+});
+
+// POST /tasks/:id/attempt
+app.post('/tasks/:id/attempt', (req, res) => {
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+  const { backoff_seconds } = req.body;
+  const newAttempt = (task.attempt_count || 0) + 1;
+  if (backoff_seconds && Number(backoff_seconds) > 0) {
+    db.prepare("UPDATE tasks SET attempt_count = ?, worker_locked_until = datetime('now', ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(newAttempt, `+${Math.floor(Number(backoff_seconds))} seconds`, task.id);
+  } else {
+    db.prepare('UPDATE tasks SET attempt_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newAttempt, task.id);
+  }
+  res.json({ ok: true, attempt_count: newAttempt });
+});
+
   const row = db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE state NOT IN ('completed', 'blocked', 'archived', 'cancelled', 'abandoned')`).get();
   res.json({ status: 'ok', uptime: process.uptime(), tasks_active: row.count, autonomy_engine: true });
 });
