@@ -405,21 +405,24 @@ app.get('/health/full', async (req, res) => {
 
   async function checkReviewerBot() {
     try {
-      const r = await fetchWithTimeout('http://localhost:3205/health', { method: 'HEAD', }, 10000);
+      const r = await fetchWithTimeout('http://localhost:3205/health', { method: 'HEAD' }, 10000);
       return r.status === 200 ? 'PASS' : `FAIL:HTTP_${r.status}`;
     } catch (e) { return `FAIL:${e.message}`; }
   }
 
-  async function checkPm2Worker(name) {
-    try {
-      const { execFile } = require('child_process');
-      const result = await new Promise((resolve, reject) => {
-        execFile('pm2', ['jlist'], { timeout: timeout10s }, (err, stdout) => {
-          if (err) return reject(err);
-          resolve(stdout);
-        });
+  async function getPm2List() {
+    const { execFile } = require('child_process');
+    const result = await new Promise((resolve, reject) => {
+      execFile('pm2', ['jlist'], { timeout: timeout10s }, (err, stdout) => {
+        if (err) return reject(err);
+        resolve(stdout);
       });
-      const list = JSON.parse(result);
+    });
+    return JSON.parse(result);
+  }
+
+  function checkWorkerFromList(list, name) {
+    try {
       const proc = list.find(p => p.name === name);
       if (!proc) return `FAIL:not_found`;
       return proc.pm2_env && proc.pm2_env.status === 'online' ? 'PASS' : `FAIL:status_${proc.pm2_env && proc.pm2_env.status}`;
@@ -466,29 +469,28 @@ app.get('/health/full', async (req, res) => {
     return empty.length === 0 ? 'PASS' : `FAIL:empty_hooks:${empty.join(',')}`;
   }
 
+  // Fetch PM2 process list once; reuse for all worker checks
+  let pm2List = [];
+  try { pm2List = await getPm2List(); } catch (_) {}
+
   const [
     reviewer_bot,
-    merge_worker,
-    deploy_worker,
-    verify_worker,
-    notify_worker,
-    bootstrap_worker,
-    qa_worker,
     cloudflare_tunnel,
     github_token,
     telegram
   ] = await Promise.all([
     checkReviewerBot(),
-    checkPm2Worker('openclaw-merge-worker'),
-    checkPm2Worker('openclaw-deploy-worker'),
-    checkPm2Worker('openclaw-verify-worker'),
-    checkPm2Worker('openclaw-notify-worker'),
-    checkPm2Worker('openclaw-bootstrap-worker'),
-    checkPm2Worker('openclaw-qa-worker'),
     checkCloudflareTunnel(),
     checkGithubToken(),
     checkTelegram()
   ]);
+
+  const merge_worker     = checkWorkerFromList(pm2List, 'openclaw-merge-worker');
+  const deploy_worker    = checkWorkerFromList(pm2List, 'openclaw-deploy-worker');
+  const verify_worker    = checkWorkerFromList(pm2List, 'openclaw-verify-worker');
+  const notify_worker    = checkWorkerFromList(pm2List, 'openclaw-notify-worker');
+  const bootstrap_worker = checkWorkerFromList(pm2List, 'openclaw-bootstrap-worker');
+  const qa_worker        = checkWorkerFromList(pm2List, 'openclaw-qa-worker');
 
   const deploy_hooks = checkDeployHooks();
 
