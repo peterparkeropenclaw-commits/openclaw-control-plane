@@ -21,6 +21,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3210;
 const ACTION_TYPES = new Set(['merge_pr', 'trigger_deploy', 'verify_deploy', 'notify_telegram', 'bootstrap_repo', 'qa_smoke_test']);
+const ACTIVE_SUMMARY_EXCLUDED_STATES = ['completed', 'blocked', 'archived', 'failed'];
 
 function getExistingAction(taskId, actionType) {
   return db.prepare(
@@ -48,6 +49,42 @@ function enqueueAction({ taskId, actionType, payload, notBeforeSeconds } = {}) {
     VALUES (?, ?, ?, 'pending', CURRENT_TIMESTAMP)
   `).run(taskId, actionType, payloadJson);
   return { action_id: result.lastInsertRowid, deduplicated: false };
+}
+
+function getTasksSummary() {
+  const stateRows = db.prepare(`
+    SELECT state, COUNT(*) AS count
+    FROM tasks
+    WHERE state NOT IN (?, ?, ?, ?)
+    GROUP BY state
+    HAVING COUNT(*) > 0
+    ORDER BY count DESC, state ASC
+  `).all(...ACTIVE_SUMMARY_EXCLUDED_STATES);
+
+  const oldestRow = db.prepare(`
+    SELECT CAST((strftime('%s', 'now') - strftime('%s', created_at)) AS INTEGER) AS oldest_active_seconds
+    FROM tasks
+    WHERE state NOT IN (?, ?, ?, ?)
+    ORDER BY datetime(created_at) ASC
+    LIMIT 1
+  `).get(...ACTIVE_SUMMARY_EXCLUDED_STATES);
+
+  const countsByState = {};
+  let totalActive = 0;
+
+  for (const row of stateRows) {
+    const count = Number(row.count || 0);
+    if (count > 0) {
+      countsByState[row.state] = count;
+      totalActive += count;
+    }
+  }
+
+  return {
+    counts_by_state: countsByState,
+    total_active: totalActive,
+    oldest_active_seconds: totalActive > 0 && oldestRow ? Number(oldestRow.oldest_active_seconds) : null,
+  };
 }
 
 
@@ -104,6 +141,11 @@ app.get('/tasks/active', (req, res) => {
     ORDER BY created_at DESC
   `).all();
   res.json(tasks);
+});
+
+// GET /tasks/summary  — must come before /tasks/:id
+app.get('/tasks/summary', (req, res) => {
+  res.json(getTasksSummary());
 });
 
 // GET /tasks/:id
@@ -490,7 +532,6 @@ app.get('/health/full', async (req, res) => {
     return empty.length === 0 ? 'PASS' : `FAIL:empty_hooks:${empty.join(',')}`;
   }
 
-  // Fetch PM2 process list once; reuse for all worker checks
   let pm2List = [];
   try { pm2List = await getPm2List(); } catch (_) {}
 
@@ -705,8 +746,9 @@ app.get('/dashboard', (req, res) => {
   const sort = req.query.sort || 'age';
   const tasks = db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all();
   const events = db.prepare('SELECT * FROM events ORDER BY created_at ASC').all();
+  const taskSummary = getTasksSummary();
   res.setHeader('Content-Type', 'text/html');
-  res.send(generateDashboardHTML(tasks, events, filter, sort));
+  res.send(generateDashboardHTML(tasks, events, filter, sort, taskSummary));
 });
 
 // GET /health
