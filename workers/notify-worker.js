@@ -7,6 +7,17 @@ const CONTROL_PLANE_URL = process.env.CONTROL_PLANE_URL || 'http://localhost:321
 const PETER_TELEGRAM_TOKEN = process.env.PETER_TELEGRAM_TOKEN;
 const BRANDON_CHAT_ID = process.env.BRANDON_CHAT_ID;
 
+// Startup env validation
+(function validateStartup() {
+  const required = ['CONTROL_PLANE_URL', 'PETER_TELEGRAM_TOKEN', 'BRANDON_CHAT_ID'];
+  const missing = required.filter(k => !process.env[k]);
+  if (missing.length > 0) {
+    process.stderr.write(`[notify-worker] FATAL: missing required env vars: ${missing.join(', ')}\n`);
+    process.exit(1);
+  }
+  process.stdout.write(`[notify-worker] startup cwd=${process.cwd()} CONTROL_PLANE_URL=${CONTROL_PLANE_URL}\n`);
+})();
+
 function log(line) {
   process.stdout.write(`[notify-worker] ${line}\n`);
 }
@@ -36,6 +47,11 @@ function buildMessage(payload = {}) {
 
   if (message_type === 'merge_failed') {
     return `⚠️ Merge failed for ${task_id}:\n${error}`;
+  }
+
+  if (message_type === 'qa_failed') {
+    const checks = Array.isArray(payload.failing_checks) ? payload.failing_checks.join(', ') : JSON.stringify(payload.failing_checks || '');
+    return `❌ QA smoke-test failed for [${task_id}].\nFailing checks: ${checks}\nManual intervention required.`;
   }
 
   return message_text || `Task ${task_id || 'unknown'} status update`;

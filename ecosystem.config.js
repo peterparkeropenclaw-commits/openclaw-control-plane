@@ -31,6 +31,18 @@ module.exports = {
       script: 'workers/notify-worker.js',
       cwd: '/Users/robotmac/openclaw/control-plane',
       env_file: '/Users/robotmac/openclaw/control-plane/.env'
+    },
+    {
+      name: 'openclaw-bootstrap-worker',
+      script: 'workers/bootstrap-worker.js',
+      cwd: '/Users/robotmac/openclaw/control-plane',
+      env_file: '/Users/robotmac/openclaw/control-plane/.env'
+    },
+    {
+      name: 'openclaw-qa-worker',
+      script: 'workers/qa-worker.js',
+      cwd: '/Users/robotmac/openclaw/control-plane',
+      env_file: '/Users/robotmac/openclaw/control-plane/.env'
     }
   ]
 };
