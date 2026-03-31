@@ -1026,42 +1026,52 @@ app.get('/endpoints', (req, res) => {
   });
 });
 
-// Fix 1 — Auto-reconcile: every 5 min, check blocked tasks with PRs for APPROVED reviews
+// Reconcile runs every 5min, max 10 tasks per run,
+// 500ms between GitHub calls to respect rate limits
 const GITHUB_TOKEN_FOR_RECONCILE = process.env.GITHUB_TOKEN;
-const GITHUB_OWNER_FOR_RECONCILE = process.env.GITHUB_OWNER;
 
 async function runAutoReconcile() {
-  try {
-    const blockedWithPR = db.prepare(`SELECT * FROM tasks WHERE state = 'blocked' AND pr_number IS NOT NULL`).all();
-    for (const task of blockedWithPR) {
-      try {
-        if (!GITHUB_TOKEN_FOR_RECONCILE || !GITHUB_OWNER_FOR_RECONCILE || !task.repo) continue;
-        const reviewsUrl = `https://api.github.com/repos/${GITHUB_OWNER_FOR_RECONCILE}/${task.repo}/pulls/${task.pr_number}/reviews`;
-        const resp = await fetchWithTimeout(reviewsUrl, {
-          headers: {
-            'Authorization': `Bearer ${GITHUB_TOKEN_FOR_RECONCILE}`,
-            'Accept': 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28'
-          }
-        }, 10000);
-        if (!resp.ok) {
-          process.stderr.write(`[reconcile] GitHub reviews API error for task ${task.id}: ${resp.status}\n`);
-          continue;
+  const blockedWithPR = db.prepare(`
+    SELECT * FROM tasks
+    WHERE state = 'blocked'
+    AND pr_number IS NOT NULL
+    LIMIT 10
+  `).all();
+
+  if (blockedWithPR.length === 0) return;
+
+  // Process sequentially with delay to avoid GitHub
+  // rate limiting — not parallel
+  for (const task of blockedWithPR) {
+    try {
+      if (!GITHUB_TOKEN_FOR_RECONCILE || !task.repo) continue;
+      const reviewsUrl = `https://api.github.com/repos/${task.repo}/pulls/${task.pr_number}/reviews`;
+      const resp = await fetchWithTimeout(reviewsUrl, {
+        headers: {
+          'Authorization': `Bearer ${GITHUB_TOKEN_FOR_RECONCILE}`,
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
         }
-        const reviews = await resp.json();
-        const approved = Array.isArray(reviews) && reviews.some(r => r.state === 'APPROVED');
-        if (approved) {
-          db.prepare(`UPDATE tasks SET state = 'review_approved', updated_at = datetime('now'), last_progress_at = datetime('now') WHERE id = ?`).run(task.id);
-          db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, 'recovered', ?)`).run(task.id, JSON.stringify({ reason: 'auto-reconcile: PR approved', from: 'blocked', to: 'review_approved' }));
-          enqueueAction({ taskId: task.id, actionType: 'merge_pr', payload: { pr_number: task.pr_number, pr_url: task.pr_url, repo: task.repo } });
-          process.stdout.write(`[reconcile] task ${task.id} auto-advanced to review_approved (PR #${task.pr_number} approved)\n`);
-        }
-      } catch (taskErr) {
-        process.stderr.write(`[reconcile] Error processing task ${task.id}: ${taskErr.message}\n`);
+      }, 10000);
+      if (!resp.ok) {
+        process.stderr.write(`[reconcile] GitHub reviews API error for task ${task.id}: ${resp.status}\n`);
+        // Rate limit: 500ms between GitHub calls
+        await new Promise(r => setTimeout(r, 500));
+        continue;
       }
+      const reviews = await resp.json();
+      const approved = Array.isArray(reviews) && reviews.some(r => r.state === 'APPROVED');
+      if (approved) {
+        db.prepare(`UPDATE tasks SET state = 'review_approved', updated_at = datetime('now'), last_progress_at = datetime('now') WHERE id = ?`).run(task.id);
+        db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, 'recovered', ?)`).run(task.id, JSON.stringify({ reason: 'auto-reconcile: PR approved', from: 'blocked', to: 'review_approved' }));
+        enqueueAction({ taskId: task.id, actionType: 'merge_pr', payload: { pr_number: task.pr_number, pr_url: task.pr_url, repo: task.repo } });
+        process.stdout.write(`[reconcile] task ${task.id} auto-advanced to review_approved (PR #${task.pr_number} approved)\n`);
+      }
+      // Rate limit: 500ms between GitHub calls
+      await new Promise(r => setTimeout(r, 500));
+    } catch (err) {
+      console.warn('[reconcile] Task', task.id, err.message);
     }
-  } catch (err) {
-    process.stderr.write(`[reconcile] Fatal error in runAutoReconcile: ${err.message}\n`);
   }
 }
 
