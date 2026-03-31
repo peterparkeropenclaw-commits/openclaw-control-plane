@@ -619,15 +619,11 @@ app.post('/actions/enqueue', (req, res) => {
   const { task_id, action_type, payload, not_before_seconds } = req.body || {};
   if (!task_id) return res.status(400).json({ error: 'task_id required' });
 
-  // Get task to inject repo into payload
-  const task = db.prepare('SELECT repo FROM tasks WHERE id = ?').get(task_id);
-  if (!task) return res.status(404).json({ error: 'Task not found' });
-
-  // Forward to real handler preserving all fields
+  // Forward to real handler — handleTaskAction is the single source of truth for repo injection
   req.params = { id: task_id };
   req.body = {
     action_type,
-    payload: { ...(payload || {}), repo: task.repo },
+    payload: payload || {},
     not_before_seconds: not_before_seconds || 0
   };
   handleTaskAction(req, res);
@@ -1087,10 +1083,21 @@ async function runAutoReconcile() {
         const reviews = await resp.json();
         const approved = Array.isArray(reviews) && reviews.some(r => r.state === 'APPROVED');
         if (approved) {
-          db.prepare(`UPDATE tasks SET state = 'review_approved', updated_at = datetime('now'), last_progress_at = datetime('now') WHERE id = ?`).run(task.id);
-          db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, 'recovered', ?)`).run(task.id, JSON.stringify({ reason: 'auto-reconcile: PR approved', from: 'blocked', to: 'review_approved' }));
-          enqueueAction({ taskId: task.id, actionType: 'merge_pr', payload: { pr_number: task.pr_number, pr_url: task.pr_url, repo: task.repo } });
-          process.stdout.write(`[reconcile] task ${task.id} auto-advanced to review_approved (PR #${task.pr_number} approved)\n`);
+          // Use state machine pattern — validate transition before applying
+          if (isValidTransition(task.state, 'review_approved')) {
+            db.prepare(`UPDATE tasks SET state = 'review_approved', updated_at = datetime('now'), last_progress_at = datetime('now') WHERE id = ?`).run(task.id);
+            db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, 'recovered', ?)`).run(task.id, JSON.stringify({ reason: 'auto-reconcile: PR approved', from: task.state, to: 'review_approved' }));
+            // Check for existing pending merge action before enqueueing
+            const existingMerge = getExistingAction(task.id, 'merge_pr');
+            if (!existingMerge) {
+              enqueueAction({ taskId: task.id, actionType: 'merge_pr', payload: { pr_number: task.pr_number, pr_url: task.pr_url, repo: task.repo } });
+            } else {
+              console.log(`[reconcile] merge_pr already pending for ${task.id}`);
+            }
+            process.stdout.write(`[reconcile] task ${task.id} auto-advanced to review_approved (PR #${task.pr_number} approved)\n`);
+          } else {
+            console.warn(`[reconcile] skipping task ${task.id} — invalid transition ${task.state} → review_approved`);
+          }
         }
         await new Promise(r => setTimeout(r, 500));
       } catch (err) {
