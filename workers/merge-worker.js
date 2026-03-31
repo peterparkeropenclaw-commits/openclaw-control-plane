@@ -128,7 +128,7 @@ async function pollOnce() {
     }
 
     const mergeRes = await fetch(
-      `https://api.github.com/repos/${GITHUB_OWNER}/${task.repo}/pulls/${payload.pr_number}/merge`,
+      `https://api.github.com/repos/${task.repo}/pulls/${payload.pr_number}/merge`,
       {
         method: 'PUT',
         timeout: 10000,

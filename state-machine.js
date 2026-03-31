@@ -7,9 +7,9 @@ const TRANSITIONS = {
   contract_written: ['builder_dispatched', 'blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
   builder_dispatched: ['build_in_progress', 'blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
   build_in_progress: ['pr_opened', 'blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
-  pr_opened: ['review_pending', 'blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
+  pr_opened: ['review_pending', 'review_approved', 'review_changes_requested', 'blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
   review_pending: ['review_approved', 'review_changes_requested', 'blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
-  review_approved: ['merge_in_progress', 'merge_pending', 'blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
+  review_approved: ['merge_in_progress', 'merge_pending', 'review_changes_requested', 'blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
   review_changes_requested: ['review_pending', 'review_approved', 'builder_dispatched', 'blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
   merge_in_progress: ['merge_pending', 'deploy_in_progress', 'deployed', 'completed', 'blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
   merge_pending: ['deployed', 'deploy_in_progress', 'blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
@@ -23,7 +23,7 @@ const TRANSITIONS = {
   cancelled: [],
   abandoned: [],
   blocked: ['review_approved', 'review_pending', 'builder_dispatched', 'blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
-  failed: ['blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned'],
+  failed: ['blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned', 'pr_opened', 'build_in_progress', 'contract_written'],
   escalated: ['blocked', 'failed', 'escalated', 'archived', 'cancelled', 'abandoned']
 };
 
