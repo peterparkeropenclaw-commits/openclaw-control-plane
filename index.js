@@ -55,9 +55,9 @@ function enqueueAction({ taskId, actionType, payload, notBeforeSeconds } = {}) {
 app.post('/tasks', async (req, res) => {
   const {
     title, repo, origin, brandon_chat_id,
-    // Phase 1 router fields
-    task_type, briefing, constraints, acceptance_criteria,
-    verification_steps, base_branch, risk_level,
+    // Phase 1 router fields — accept both 'brief' and 'briefing' for compatibility
+    task_type, briefing, brief, constraints, acceptance_criteria,
+    verification_steps, base_branch, risk_level, state: initialState,
   } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
 
@@ -67,14 +67,16 @@ app.post('/tasks', async (req, res) => {
   if (existing) return res.json({ task_id: existing.id, deduplicated: true });
 
   const id = `OC-${Date.now()}`;
+  const resolvedBrief = briefing || brief || null;
+  const resolvedState = initialState || 'brief_received';
   db.prepare(`
     INSERT INTO tasks (id, title, repo, origin, brandon_chat_id, state,
       task_type, briefing, constraints, acceptance_criteria, verification_steps, base_branch, risk_level)
-    VALUES (?, ?, ?, ?, ?, 'brief_received', ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    id, title, repo || null, origin || null, brandon_chat_id || null,
+    id, title, repo || null, origin || null, brandon_chat_id || null, resolvedState,
     task_type || 'build',
-    briefing || null,
+    resolvedBrief,
     constraints || null,
     typeof acceptance_criteria === 'string' ? acceptance_criteria : JSON.stringify(acceptance_criteria || []),
     typeof verification_steps === 'string' ? verification_steps : JSON.stringify(verification_steps || []),
@@ -85,7 +87,7 @@ app.post('/tasks', async (req, res) => {
   db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, ?, ?)`).run(id, 'created', null);
 
   const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
-  await notifyState(task, 'brief_received').catch(() => {});
+  await notifyState(task, resolvedState).catch(() => {});
 
   res.json({ task_id: id });
 });
@@ -878,6 +880,76 @@ app.post('/tasks/:id/attempt', (req, res) => {
   }
   res.json({ ok: true, attempt_count: newAttempt });
 });
+
+// ── Memory endpoints ──────────────────────────────────────────────────────────
+
+// GET /memory/context — formatted context block for prompt injection
+app.get('/memory/context', (req, res) => {
+  const { scope, include_global = 'true' } = req.query;
+  if (!scope) return res.status(400).json({ error: 'scope is required' });
+  const limit = Math.min(parseInt(req.query.limit) || 15, 50);
+  const includeGlobal = include_global !== 'false';
+
+  let rows;
+  if (includeGlobal && scope !== 'global') {
+    rows = db.prepare(
+      `SELECT * FROM memories WHERE scope IN (?, 'global') ORDER BY importance DESC, created_at DESC LIMIT ?`
+    ).all(scope, limit);
+  } else {
+    rows = db.prepare(
+      `SELECT * FROM memories WHERE scope = ? ORDER BY importance DESC, created_at DESC LIMIT ?`
+    ).all(scope, limit);
+  }
+
+  const groups = { rule: [], decision: [], failure: [], success: [], pattern: [], preference: [], context: [] };
+  for (const row of rows) {
+    const key = groups[row.memory_type] ? row.memory_type : 'context';
+    groups[key].push(row.content);
+  }
+
+  const labels = { rule: 'Standing Rules', decision: 'Decisions', failure: 'Known Failures', success: 'Successes', pattern: 'Patterns', preference: 'Preferences', context: 'Context' };
+  let block = '## Memory Context\n';
+  for (const [type, items] of Object.entries(groups)) {
+    if (items.length === 0) continue;
+    block += `\n**${labels[type]}:**\n`;
+    for (const item of items) block += `- ${item}\n`;
+  }
+
+  res.json({ context_block: block.trim(), memory_count: rows.length, scope, generated_at: new Date().toISOString() });
+});
+
+// GET /memory — list memories with filters
+app.get('/memory', (req, res) => {
+  const { scope, memory_type, agent, min_importance } = req.query;
+  let sql = 'SELECT * FROM memories WHERE 1=1';
+  const params = [];
+  if (scope) { sql += ' AND scope = ?'; params.push(scope); }
+  if (memory_type) { sql += ' AND memory_type = ?'; params.push(memory_type); }
+  if (agent) { sql += ' AND agent = ?'; params.push(agent); }
+  if (min_importance) { sql += ' AND importance >= ?'; params.push(parseInt(min_importance)); }
+  sql += ' ORDER BY importance DESC, created_at DESC';
+  res.json(db.prepare(sql).all(...params));
+});
+
+// POST /memory — create a memory
+app.post('/memory', (req, res) => {
+  const { scope, agent, memory_type, content, importance = 5, task_id } = req.body;
+  if (!scope || !memory_type || !content) return res.status(400).json({ error: 'scope, memory_type, content are required' });
+  const result = db.prepare(
+    `INSERT INTO memories (scope, agent, memory_type, content, importance, task_id) VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(scope, agent || null, memory_type, content, importance, task_id || null);
+  const row = db.prepare('SELECT * FROM memories WHERE id = ?').get(result.lastInsertRowid);
+  res.status(201).json(row);
+});
+
+// DELETE /memory/:id — remove a memory
+app.delete('/memory/:id', (req, res) => {
+  const result = db.prepare('DELETE FROM memories WHERE id = ?').run(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Memory not found' });
+  res.json({ ok: true, deleted_id: parseInt(req.params.id) });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
   startTimeouts();

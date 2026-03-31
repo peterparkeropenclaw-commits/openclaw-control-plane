@@ -65,6 +65,23 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_aq_status_notbefore ON action_queue(status, not_before);
   CREATE INDEX IF NOT EXISTS idx_aq_task ON action_queue(task_id);
 
+  CREATE TABLE IF NOT EXISTS memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope TEXT NOT NULL,
+    agent TEXT,
+    memory_type TEXT NOT NULL,
+    content TEXT NOT NULL,
+    importance INTEGER DEFAULT 5,
+    created_at DATETIME DEFAULT (datetime('now')),
+    expires_at DATETIME,
+    task_id TEXT,
+    FOREIGN KEY (task_id) REFERENCES tasks(id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope);
+  CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
+  CREATE INDEX IF NOT EXISTS idx_memories_importance ON memories(importance DESC);
+
   CREATE TABLE IF NOT EXISTS worker_registry (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     task_type TEXT NOT NULL UNIQUE,
