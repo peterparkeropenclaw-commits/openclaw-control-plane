@@ -582,7 +582,7 @@ function handleTaskAction(req, res) {
     return res.status(400).json({ error: 'Invalid action_type' });
   }
 
-  const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
+  const task = db.prepare(`SELECT id, repo, state FROM tasks WHERE id = ?`).get(id);
   if (!task) return res.status(404).json({ error: 'Task not found' });
 
   const existing = getExistingAction(id, action_type);
