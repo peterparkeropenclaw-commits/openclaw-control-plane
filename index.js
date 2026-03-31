@@ -1048,6 +1048,9 @@ const GITHUB_TOKEN_FOR_RECONCILE = process.env.GITHUB_TOKEN;
 
 let reconcileRunning = false;
 
+// Auto-reconcile: runs on startup then every 5 mins
+// Recovers blocked tasks with approved PRs
+// Max 10 tasks per run, 500ms between GitHub calls
 async function runAutoReconcile() {
   if (reconcileRunning) {
     console.warn('[reconcile] Previous run still in flight, skipping');
