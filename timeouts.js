@@ -33,13 +33,16 @@ function minutesAgo(dateStr) {
 
 // ─── Per-state thresholds (minutes) ──────────────────────────────────────────
 const STATE_THRESHOLDS = {
-  brief_received:              60,   // Ops Director has 60min to write contract
+  brief_received:              120,  // 120min to write contract
   contract_written:            60,   // Builder dispatch should happen within 60min
-  builder_dispatched:          45,   // Builder has 45min to open a PR
-  build_in_progress:           90,   // Active build allowed 90min
-  pr_opened:                   15,   // Reviewer should fire within 15min
+  builder_dispatched:          120,  // Builder has 120min to open a PR
+  build_in_progress:           120,  // Active build allowed 120min
+  registered:                  60,   // Registered tasks should be picked up within 60min
+  in_progress:                 120,  // In-progress tasks allowed 120min
+  pr_opened:                   90,   // Reviewer should fire within 90min
   review_pending:              15,   // Review result expected within 15min
-  review_changes_requested:    30,   // Builder should fix and re-push within 30min
+  review_changes_requested:    120,  // Builder should fix and re-push within 120min
+  blocked:                     30,   // Blocked tasks should be recovered within 30min
   merge_pending:                5,   // Merge worker should act within 5min
   merge_in_progress:           10,   // Merge should complete within 10min
   deploy_in_progress:          15,   // Deploy should complete within 15min

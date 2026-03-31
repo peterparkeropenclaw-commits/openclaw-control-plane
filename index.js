@@ -34,8 +34,14 @@ function enqueueAction({ taskId, actionType, payload, notBeforeSeconds } = {}) {
 
   const payloadJson = JSON.stringify(payload || {});
 
-  if (Number.isFinite(notBeforeSeconds) && notBeforeSeconds > 0) {
-    const delay = `+${Math.floor(notBeforeSeconds)} seconds`;
+  // Fix 4: cap not_before at 10 minutes max
+  const MAX_NOT_BEFORE_SECONDS = 10 * 60;
+  const cappedSeconds = Number.isFinite(notBeforeSeconds) && notBeforeSeconds > 0
+    ? Math.min(notBeforeSeconds, MAX_NOT_BEFORE_SECONDS)
+    : null;
+
+  if (cappedSeconds) {
+    const delay = `+${Math.floor(cappedSeconds)} seconds`;
     const result = db.prepare(`
       INSERT INTO action_queue (task_id, action_type, payload_json, status, not_before, updated_at)
       VALUES (?, ?, ?, 'pending', datetime('now', ?), CURRENT_TIMESTAMP)
@@ -568,7 +574,7 @@ app.get('/health/full', async (req, res) => {
 });
 
 // POST /tasks/:id/actions
-app.post('/tasks/:id/actions', (req, res) => {
+function handleTaskAction(req, res) {
   const { id } = req.params;
   const { action_type, payload, not_before_seconds } = req.body || {};
 
@@ -576,18 +582,27 @@ app.post('/tasks/:id/actions', (req, res) => {
     return res.status(400).json({ error: 'Invalid action_type' });
   }
 
-  const task = db.prepare(`SELECT id FROM tasks WHERE id = ?`).get(id);
+  const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id);
   if (!task) return res.status(404).json({ error: 'Task not found' });
 
   const existing = getExistingAction(id, action_type);
   if (existing) return res.status(409).json({ error: 'Action already pending or claimed' });
 
+  // Fix 4: cap not_before at 10 minutes max
+  const MAX_NOT_BEFORE_SECONDS = 10 * 60; // 10 minutes
   const parsedNotBefore = Number(not_before_seconds);
+  const cappedSeconds = Number.isFinite(parsedNotBefore)
+    ? Math.min(parsedNotBefore, MAX_NOT_BEFORE_SECONDS)
+    : undefined;
+
+  // Fix 2: always inject repo into payload
+  const mergedPayload = { ...(payload || {}), repo: task.repo };
+
   const result = enqueueAction({
     taskId: id,
     actionType: action_type,
-    payload: payload || {},
-    notBeforeSeconds: Number.isFinite(parsedNotBefore) ? parsedNotBefore : undefined
+    payload: mergedPayload,
+    notBeforeSeconds: cappedSeconds
   });
 
   if (result.existing) {
@@ -595,6 +610,27 @@ app.post('/tasks/:id/actions', (req, res) => {
   }
 
   return res.json({ action_id: result.action_id, task_id: id, action_type, status: 'pending' });
+}
+
+app.post('/tasks/:id/actions', handleTaskAction);
+
+// Fix 3 — /actions/enqueue alias
+app.post('/actions/enqueue', (req, res) => {
+  const { task_id, action_type, payload, not_before_seconds } = req.body || {};
+  if (!task_id) return res.status(400).json({ error: 'task_id required' });
+
+  // Get task to inject repo into payload
+  const task = db.prepare('SELECT repo FROM tasks WHERE id = ?').get(task_id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+
+  // Forward to real handler preserving all fields
+  req.params = { id: task_id };
+  req.body = {
+    action_type,
+    payload: { ...(payload || {}), repo: task.repo },
+    not_before_seconds: not_before_seconds || 0
+  };
+  handleTaskAction(req, res);
 });
 
 // GET /actions/pending
@@ -735,6 +771,41 @@ app.get('/dashboard', (req, res) => {
   const events = db.prepare('SELECT * FROM events ORDER BY created_at ASC').all();
   res.setHeader('Content-Type', 'text/html');
   res.send(generateDashboardHTML(tasks, events, filter, sort));
+});
+
+// GET /endpoints — discovery route listing all available API routes
+app.get('/endpoints', (req, res) => {
+  res.json({
+    tasks: [
+      'GET /tasks',
+      'GET /tasks/:id',
+      'GET /tasks/by-state/:state',
+      'POST /tasks',
+      'POST /tasks/:id/state',
+      'POST /tasks/:id/pr',
+      'POST /tasks/:id/result',
+      'POST /tasks/:id/attempt',
+      'POST /tasks/:id/actions',
+      'POST /tasks/:id/recover',
+      'POST /actions/enqueue (alias)'
+    ],
+    memory: [
+      'GET /memory',
+      'GET /memory/context',
+      'POST /memory',
+      'DELETE /memory/:id'
+    ],
+    registry: [
+      'GET /registry',
+      'GET /registry/:task_type',
+      'POST /registry'
+    ],
+    system: [
+      'GET /health',
+      'GET /health/full',
+      'GET /endpoints'
+    ]
+  });
 });
 
 // GET /health
@@ -881,6 +952,28 @@ app.post('/tasks/:id/attempt', (req, res) => {
   res.json({ ok: true, attempt_count: newAttempt });
 });
 
+// POST /tasks/:id/recover — walks blocked/failed task back to a recoverable state
+app.post('/tasks/:id/recover', (req, res) => {
+  const { reason } = req.body || {};
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+
+  const recoverableStates = ['blocked', 'failed', 'stale'];
+  if (!recoverableStates.includes(task.state)) {
+    return res.status(400).json({
+      error: `Cannot recover task in state: ${task.state}`,
+      recoverable_states: recoverableStates
+    });
+  }
+
+  const recoveryState = task.pr_number ? 'review_approved' : 'registered';
+
+  db.prepare(`UPDATE tasks SET state = ?, updated_at = datetime('now'), last_progress_at = datetime('now') WHERE id = ?`).run(recoveryState, task.id);
+  db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, 'recovered', ?)`).run(task.id, JSON.stringify({ reason: reason || 'manual recovery', from: task.state, to: recoveryState }));
+
+  res.json({ recovered: true, from: task.state, to: recoveryState });
+});
+
 // ── Memory endpoints ──────────────────────────────────────────────────────────
 
 // GET /memory/context — formatted context block for prompt injection
@@ -951,6 +1044,71 @@ app.delete('/memory/:id', (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+
+// Reconcile runs every 5min, max 10 tasks per run,
+// 500ms between GitHub calls to respect rate limits
+const GITHUB_TOKEN_FOR_RECONCILE = process.env.GITHUB_TOKEN;
+
+let reconcileRunning = false;
+
+async function runAutoReconcile() {
+  if (reconcileRunning) {
+    console.warn('[reconcile] Previous run still in flight, skipping');
+    scheduleNextReconcile();
+    return;
+  }
+
+  reconcileRunning = true;
+  try {
+    const blockedWithPR = db.prepare(`
+      SELECT * FROM tasks
+      WHERE state = 'blocked'
+      AND pr_number IS NOT NULL
+      LIMIT 10
+    `).all();
+
+    for (const task of blockedWithPR) {
+      try {
+        if (!GITHUB_TOKEN_FOR_RECONCILE || !task.repo) continue;
+        const reviewsUrl = `https://api.github.com/repos/${task.repo}/pulls/${task.pr_number}/reviews`;
+        const resp = await fetchWithTimeout(reviewsUrl, {
+          headers: {
+            'Authorization': `Bearer ${GITHUB_TOKEN_FOR_RECONCILE}`,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+          }
+        }, 10000);
+        if (!resp.ok) {
+          process.stderr.write(`[reconcile] GitHub reviews API error for task ${task.id}: ${resp.status}\n`);
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+        const reviews = await resp.json();
+        const approved = Array.isArray(reviews) && reviews.some(r => r.state === 'APPROVED');
+        if (approved) {
+          db.prepare(`UPDATE tasks SET state = 'review_approved', updated_at = datetime('now'), last_progress_at = datetime('now') WHERE id = ?`).run(task.id);
+          db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, 'recovered', ?)`).run(task.id, JSON.stringify({ reason: 'auto-reconcile: PR approved', from: 'blocked', to: 'review_approved' }));
+          enqueueAction({ taskId: task.id, actionType: 'merge_pr', payload: { pr_number: task.pr_number, pr_url: task.pr_url, repo: task.repo } });
+          process.stdout.write(`[reconcile] task ${task.id} auto-advanced to review_approved (PR #${task.pr_number} approved)\n`);
+        }
+        await new Promise(r => setTimeout(r, 500));
+      } catch (err) {
+        console.warn('[reconcile] Task', task.id, err.message);
+      }
+    }
+  } finally {
+    reconcileRunning = false;
+    scheduleNextReconcile();
+  }
+}
+
+function scheduleNextReconcile() {
+  setTimeout(runAutoReconcile, 5 * 60 * 1000);
+}
+
 app.listen(PORT, () => {
   startTimeouts();
+  // Start the reconcile loop — next run only starts after current completes
+  scheduleNextReconcile();
 });
