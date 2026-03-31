@@ -1,5 +1,8 @@
 'use strict';
 
+// Internal migration script — runs locally against CP
+// localhost:3210 is correct and intentional
+// This is NOT customer-facing code. The no-localhost rule applies to frontend/API code only.
 const BASE_URL = process.env.CP_URL || 'http://localhost:3210';
 
 const seedMemories = [
