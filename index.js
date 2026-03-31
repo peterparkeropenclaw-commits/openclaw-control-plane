@@ -1109,6 +1109,6 @@ function scheduleNextReconcile() {
 
 app.listen(PORT, () => {
   startTimeouts();
-  // Start the reconcile loop — next run only starts after current completes
-  scheduleNextReconcile();
+  // Run immediately on startup, then every 5 minutes
+  runAutoReconcile();
 });
