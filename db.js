@@ -82,6 +82,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
   CREATE INDEX IF NOT EXISTS idx_memories_importance ON memories(importance DESC);
 
+  CREATE INDEX IF NOT EXISTS idx_tasks_state
+    ON tasks(state);
+
+  CREATE INDEX IF NOT EXISTS idx_tasks_state_pr
+    ON tasks(state, pr_number)
+    WHERE pr_number IS NOT NULL;
+
   CREATE TABLE IF NOT EXISTS worker_registry (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     task_type TEXT NOT NULL UNIQUE,

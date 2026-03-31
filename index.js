@@ -983,6 +983,14 @@ app.post('/tasks/:id/recover', (req, res) => {
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
   if (!task) return res.status(404).json({ error: 'Task not found' });
 
+  const recoverableStates = ['blocked', 'failed', 'stale'];
+  if (!recoverableStates.includes(task.state)) {
+    return res.status(400).json({
+      error: `Cannot recover task in state: ${task.state}`,
+      recoverable_states: recoverableStates
+    });
+  }
+
   const recoveryState = task.pr_number ? 'review_approved' : 'registered';
 
   db.prepare(`UPDATE tasks SET state = ?, updated_at = datetime('now'), last_progress_at = datetime('now') WHERE id = ?`).run(recoveryState, task.id);
