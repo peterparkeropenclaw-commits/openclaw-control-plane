@@ -616,10 +616,20 @@ app.post('/tasks/:id/actions', handleTaskAction);
 
 // Fix 3 — /actions/enqueue alias
 app.post('/actions/enqueue', (req, res) => {
-  const { task_id, action_type, payload } = req.body || {};
+  const { task_id, action_type, payload, not_before_seconds } = req.body || {};
   if (!task_id) return res.status(400).json({ error: 'task_id required' });
+
+  // Get task to inject repo into payload
+  const task = db.prepare('SELECT repo FROM tasks WHERE id = ?').get(task_id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+
+  // Forward to real handler preserving all fields
   req.params = { id: task_id };
-  req.body = { action_type, ...(payload || {}) };
+  req.body = {
+    action_type,
+    payload: { ...(payload || {}), repo: task.repo },
+    not_before_seconds: not_before_seconds || 0
+  };
   handleTaskAction(req, res);
 });
 
