@@ -763,6 +763,41 @@ app.get('/dashboard', (req, res) => {
   res.send(generateDashboardHTML(tasks, events, filter, sort));
 });
 
+// GET /endpoints — discovery route listing all available API routes
+app.get('/endpoints', (req, res) => {
+  res.json({
+    tasks: [
+      'GET /tasks',
+      'GET /tasks/:id',
+      'GET /tasks/by-state/:state',
+      'POST /tasks',
+      'POST /tasks/:id/state',
+      'POST /tasks/:id/pr',
+      'POST /tasks/:id/result',
+      'POST /tasks/:id/attempt',
+      'POST /tasks/:id/actions',
+      'POST /tasks/:id/recover',
+      'POST /actions/enqueue (alias)'
+    ],
+    memory: [
+      'GET /memory',
+      'GET /memory/context',
+      'POST /memory',
+      'DELETE /memory/:id'
+    ],
+    registry: [
+      'GET /registry',
+      'GET /registry/:task_type',
+      'POST /registry'
+    ],
+    system: [
+      'GET /health',
+      'GET /health/full',
+      'GET /endpoints'
+    ]
+  });
+});
+
 // GET /health
 app.get('/health', (req, res) => {
   const row = db.prepare(`SELECT COUNT(*) as count FROM tasks WHERE state NOT IN ('completed', 'blocked', 'archived', 'cancelled', 'abandoned')`).get();
@@ -907,6 +942,28 @@ app.post('/tasks/:id/attempt', (req, res) => {
   res.json({ ok: true, attempt_count: newAttempt });
 });
 
+// POST /tasks/:id/recover — walks blocked/failed task back to a recoverable state
+app.post('/tasks/:id/recover', (req, res) => {
+  const { reason } = req.body || {};
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+
+  const recoverableStates = ['blocked', 'failed', 'stale'];
+  if (!recoverableStates.includes(task.state)) {
+    return res.status(400).json({
+      error: `Cannot recover task in state: ${task.state}`,
+      recoverable_states: recoverableStates
+    });
+  }
+
+  const recoveryState = task.pr_number ? 'review_approved' : 'registered';
+
+  db.prepare(`UPDATE tasks SET state = ?, updated_at = datetime('now'), last_progress_at = datetime('now') WHERE id = ?`).run(recoveryState, task.id);
+  db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, 'recovered', ?)`).run(task.id, JSON.stringify({ reason: reason || 'manual recovery', from: task.state, to: recoveryState }));
+
+  res.json({ recovered: true, from: task.state, to: recoveryState });
+});
+
 // ── Memory endpoints ──────────────────────────────────────────────────────────
 
 // GET /memory/context — formatted context block for prompt injection
@@ -977,62 +1034,7 @@ app.delete('/memory/:id', (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Fix 1 — POST /tasks/:id/recover
-app.post('/tasks/:id/recover', (req, res) => {
-  const { reason } = req.body || {};
-  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
-  if (!task) return res.status(404).json({ error: 'Task not found' });
 
-  const recoverableStates = ['blocked', 'failed', 'stale'];
-  if (!recoverableStates.includes(task.state)) {
-    return res.status(400).json({
-      error: `Cannot recover task in state: ${task.state}`,
-      recoverable_states: recoverableStates
-    });
-  }
-
-  const recoveryState = task.pr_number ? 'review_approved' : 'registered';
-
-  db.prepare(`UPDATE tasks SET state = ?, updated_at = datetime('now'), last_progress_at = datetime('now') WHERE id = ?`).run(recoveryState, task.id);
-  db.prepare(`INSERT INTO events (task_id, event_type, payload) VALUES (?, 'recovered', ?)`).run(task.id, JSON.stringify({ reason: reason || 'manual recovery', from: task.state, to: recoveryState }));
-
-  res.json({ recovered: true, from: task.state, to: recoveryState });
-});
-
-// Fix 6 — GET /endpoints discovery
-app.get('/endpoints', (req, res) => {
-  res.json({
-    tasks: [
-      'GET /tasks',
-      'GET /tasks/:id',
-      'GET /tasks/by-state/:state',
-      'POST /tasks',
-      'POST /tasks/:id/state',
-      'POST /tasks/:id/pr',
-      'POST /tasks/:id/result',
-      'POST /tasks/:id/attempt',
-      'POST /tasks/:id/actions',
-      'POST /tasks/:id/recover',
-      'POST /actions/enqueue (alias)'
-    ],
-    memory: [
-      'GET /memory',
-      'GET /memory/context',
-      'POST /memory',
-      'DELETE /memory/:id'
-    ],
-    registry: [
-      'GET /registry',
-      'GET /registry/:task_type',
-      'POST /registry'
-    ],
-    system: [
-      'GET /health',
-      'GET /health/full',
-      'GET /endpoints'
-    ]
-  });
-});
 
 // Reconcile runs every 5min, max 10 tasks per run,
 // 500ms between GitHub calls to respect rate limits
