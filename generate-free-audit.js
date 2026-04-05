@@ -6,6 +6,11 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+const STRIPE_LINKS = {
+  GBP: 'https://buy.stripe.com/PLACEHOLDER_UK',
+  USD: 'https://buy.stripe.com/PLACEHOLDER_US',
+};
+
 const args = process.argv.slice(2);
 const getArg = (flag) => {
   const idx = args.indexOf(flag);
@@ -23,6 +28,8 @@ if (!inputFile) {
 const data = JSON.parse(fs.readFileSync(inputFile, 'utf8'));
 const currency = detectCurrency(data);
 const sym = currency.symbol;
+const stripeUrl = STRIPE_LINKS[currency.code] || STRIPE_LINKS.GBP;
+const stripePriceLabel = currency.code === 'USD' ? '$199' : '£199';
 const safeName = data.property_name.replace(/[^a-z0-9]/gi, '-').toLowerCase();
 const outputFile = outputArg || `${safeName}-strclinic-free-audit.pdf`;
 
@@ -47,6 +54,7 @@ function detectCurrency(data) {
   if (/\b(uk|united kingdom|england|scotland|wales|london|cornwall|devon|yorkshire)\b/.test(loc)) return { symbol: '£', code: 'GBP', name: 'British Pounds' };
   return { symbol: '£', code: 'GBP', name: 'British Pounds' };
 }
+
 
 function extractLowerBound(estimate) {
   if (!estimate) return '£199';
@@ -626,13 +634,17 @@ function buildHtml(d) {
     <p style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:48pt;color:#E8C840;line-height:1;margin-bottom:4px;">£199</p>
     <p style="font-family:'IBM Plex Mono',monospace;font-size:8pt;color:rgba(255,255,255,0.5);letter-spacing:0.2em;">/ $199 USD</p>
   </div>
-  <div style="background:rgba(232,200,64,0.1);border-left:4px solid #E8C840;padding:16px 20px;border-radius:2px;margin-bottom:20px;max-width:520px;">
-    <p style="font-family:'Inter',Arial,sans-serif;font-size:10.5pt;color:white;line-height:1.6;margin:0;">
-      Reply to this email to get started. We'll send the invoice and deliver your full report within 5 working days.
-    </p>
-  </div>
+  <a href="${stripeUrl}" style="display:inline-block;background:#E8C840;color:#1A1A2E;font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:18pt;text-transform:uppercase;letter-spacing:0.04em;padding:16px 40px;border-radius:4px;text-decoration:none;margin-bottom:16px;">
+    GET YOUR FULL REPORT — ${stripePriceLabel}
+  </a>
+  <p style="font-family:'Inter',Arial,sans-serif;font-size:10pt;color:rgba(255,255,255,0.65);line-height:1.6;margin-bottom:20px;max-width:480px;">
+    Click above to go directly to secure checkout. Your report will be delivered by email within 5 working days of payment.
+  </p>
   <p style="font-family:'IBM Plex Mono',monospace;font-size:8pt;color:rgba(255,255,255,0.4);letter-spacing:0.15em;">
     No subscription. One payment. Everything fixed.
+  </p>
+  <p style="font-family:'IBM Plex Mono',monospace;font-size:7pt;color:rgba(255,255,255,0.3);letter-spacing:0.05em;margin-top:12px;">
+    Or reply directly to this email and we'll send you the invoice.
   </p>
 </div>
 
