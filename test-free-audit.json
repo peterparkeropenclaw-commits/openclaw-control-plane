@@ -1,0 +1,28 @@
+{
+  "property_name": "Rowan Hollow",
+  "location": "Falmouth, Cornwall",
+  "date": "April 2026",
+  "overall_score": 47,
+  "score_narrative": "Your listing has real potential — the property itself has standout features (private garden, two parking spaces, Rangemaster kitchen) that most comparable Falmouth listings lack. The score is held back by a weak title, a suboptimal photo sequence, and static year-round pricing that leaves significant seasonal revenue uncaptured.",
+  "top_3_issues": [
+    {
+      "issue": "Title: No searchable attributes",
+      "description": "Your current title contains no keywords guests actually search for. 'Unique Falmouth Stay' returns against hundreds of listings with no distinguishing signal. The algorithm is ranking your listing lower because the title doesn't match search intent.",
+      "revenue_impact": "Est. impact: £180–£240/month in missed bookings"
+    },
+    {
+      "issue": "Photo sequence: Differentiators buried",
+      "description": "Your lead photo is correctly a lounge shot, but the garden — your biggest differentiator — doesn't appear until position 4 or later. Most guests decide in the first 3 photos. Moving the garden photo to position 2 is estimated to materially improve conversion.",
+      "revenue_impact": "Est. impact: £120–£160/month in missed conversions"
+    },
+    {
+      "issue": "Pricing: Static year-round rate",
+      "description": "Your nightly rate is applied year-round with no seasonal variation. Cornwall is one of the UK's most seasonal short-let markets — July and August command 40–60% premiums over comparable listings. You are currently leaving those premiums uncaptured.",
+      "revenue_impact": "Est. impact: £2,100–£2,800/year in missed peak revenue"
+    }
+  ],
+  "current_title": "Rowan Hollow - Unique Falmouth Stay",
+  "rewritten_title": "Central Falmouth | Garden + Parking | Pets Welcome",
+  "title_rationale": "The new title front-loads the three attributes guests actually filter for in Falmouth: central location, private outdoor space, and parking (rare and expensive in town). Adding pet-friendly expands the visible audience to the large dog-owner segment. Each element is a searchable signal the algorithm can match to guest queries.",
+  "opportunity_summary": "If the three issues identified in this audit were addressed — a keyword-rich title, a corrected photo sequence, and a seasonal pricing structure — comparable Falmouth properties with your combination of garden, parking, and central location achieve 68–75% annual occupancy and monthly revenue of £1,600–£2,100 at peak. At your current rate and sequence, you are estimated to be running at approximately 52–58% occupancy with a monthly average of £1,100–£1,350. The gap is real, it is measurable, and the fixes are all implementable within a week."
+}
