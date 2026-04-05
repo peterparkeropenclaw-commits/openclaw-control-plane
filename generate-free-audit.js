@@ -24,6 +24,12 @@ const data = JSON.parse(fs.readFileSync(inputFile, 'utf8'));
 const safeName = data.property_name.replace(/[^a-z0-9]/gi, '-').toLowerCase();
 const outputFile = outputArg || `${safeName}-strclinic-free-audit.pdf`;
 
+function extractLowerBound(estimate) {
+  if (!estimate) return '£199';
+  const match = estimate.match(/£[\d,]+/);
+  return match ? match[0] : estimate;
+}
+
 function escHtml(str) {
   if (!str) return '';
   return String(str)
@@ -158,7 +164,7 @@ function buildHtml(d) {
 
   /* ── PAGE 2: SCORE + ISSUES ── */
   .score-page {
-    background: #FFFFFF;
+    background: #1A1A2E;
     padding: 56px 56px 48px;
   }
 
@@ -175,7 +181,7 @@ function buildHtml(d) {
     font-family: 'Barlow Condensed', sans-serif;
     font-weight: 900;
     font-size: 88px;
-    color: #1A1A2E;
+    color: #FFFFFF;
     line-height: 1;
     display: inline;
   }
@@ -184,7 +190,7 @@ function buildHtml(d) {
     font-family: 'Barlow Condensed', sans-serif;
     font-weight: 700;
     font-size: 40px;
-    color: rgba(26,26,46,0.35);
+    color: rgba(255,255,255,0.35);
     display: inline;
     margin-left: 4px;
   }
@@ -193,7 +199,7 @@ function buildHtml(d) {
     font-family: 'Inter', sans-serif;
     font-weight: 400;
     font-size: 13px;
-    color: rgba(26,26,46,0.7);
+    color: rgba(255,255,255,0.7);
     font-style: italic;
     max-width: 480px;
     line-height: 1.6;
@@ -225,7 +231,7 @@ function buildHtml(d) {
     font-family: 'Barlow Condensed', sans-serif;
     font-weight: 700;
     font-size: 18px;
-    color: #1A1A2E;
+    color: #FFFFFF;
     text-transform: uppercase;
     margin-bottom: 6px;
   }
@@ -234,7 +240,7 @@ function buildHtml(d) {
     font-family: 'Inter', sans-serif;
     font-weight: 400;
     font-size: 12px;
-    color: rgba(26,26,46,0.75);
+    color: rgba(255,255,255,0.75);
     line-height: 1.6;
     margin-bottom: 6px;
   }
@@ -247,14 +253,14 @@ function buildHtml(d) {
 
   .issue-divider {
     border: none;
-    border-top: 1px solid rgba(26,26,46,0.1);
+    border-top: 1px solid rgba(255,255,255,0.1);
     margin: 16px 0;
   }
 
   .score-note {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 9px;
-    color: rgba(26,26,46,0.35);
+    color: rgba(255,255,255,0.35);
     font-style: italic;
     margin-top: 24px;
   }
@@ -362,7 +368,7 @@ function buildHtml(d) {
 
   /* ── PAGE 4: OPPORTUNITY + UPSELL ── */
   .opp-page {
-    background: #FFFFFF;
+    background: #1A1A2E;
     padding: 56px 56px 48px;
   }
 
@@ -514,6 +520,22 @@ function buildHtml(d) {
     <span class="score-number">${d.overall_score}</span><span class="score-suffix">/100</span>
   </div>
   <div class="score-narrative">${escHtml(d.score_narrative)}</div>
+  <div style="text-align:center;margin:20px 0 8px;">
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:10pt;color:#E8C840;font-weight:600;letter-spacing:0.05em;margin:0;">
+      Based on your listing's location, price, and current performance signals, we estimate your listing is leaving approximately
+    </p>
+    <p style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:36pt;color:#E8C840;line-height:1.1;margin:4px 0;">
+      ${d.monthly_revenue_gap_estimate || '£200–£400/month'}
+    </p>
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:9pt;color:#E8C840;opacity:0.8;letter-spacing:0.1em;margin:0;">
+      on the table each month.
+    </p>
+  </div>
+  <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);padding:12px 18px;border-radius:2px;margin-bottom:28px;text-align:center;">
+    <p style="font-family:'Inter',Arial,sans-serif;font-size:9pt;color:rgba(255,255,255,0.65);line-height:1.6;margin:0;font-style:italic;">
+      The average STR Clinic audit scores 58/100. Listings scoring below 50 typically underperform their local market by 20–30% on occupancy.
+    </p>
+  </div>
   <div class="gold-rule"></div>
   <div class="issues-label">Top 3 Issues Identified</div>
   ${issuesHtml}
@@ -535,24 +557,59 @@ function buildHtml(d) {
     <div class="rationale-label">Why This Works</div>
     <div class="rationale-text">${escHtml(d.title_rationale)}</div>
   </div>
+  <div style="margin-top:20px;margin-bottom:4px;">
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:7.5pt;color:#E8C840;letter-spacing:0.3em;text-transform:uppercase;margin-bottom:12px;">A glimpse of what else we found</p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="background:rgba(26,26,46,0.07);border-left:3px solid rgba(232,200,64,0.5);padding:12px 16px;border-radius:2px;">
+        <p style="font-family:'IBM Plex Mono',monospace;font-size:7pt;color:#E8C840;letter-spacing:0.25em;text-transform:uppercase;margin-bottom:6px;">Description</p>
+        <p style="font-family:'Inter',Arial,sans-serif;font-size:9.5pt;color:#1A1A2E;line-height:1.55;margin:0;">${d.description_teaser || ''}</p>
+      </div>
+      <div style="background:rgba(26,26,46,0.07);border-left:3px solid rgba(232,200,64,0.5);padding:12px 16px;border-radius:2px;">
+        <p style="font-family:'IBM Plex Mono',monospace;font-size:7pt;color:#E8C840;letter-spacing:0.25em;text-transform:uppercase;margin-bottom:6px;">Pricing</p>
+        <p style="font-family:'Inter',Arial,sans-serif;font-size:9.5pt;color:#1A1A2E;line-height:1.55;margin:0;">${d.pricing_teaser || ''}</p>
+      </div>
+    </div>
+  </div>
+  <div style="background:#1A1A2E;padding:20px 24px;border-radius:2px;margin-top:20px;">
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:7.5pt;color:#E8C840;letter-spacing:0.3em;text-transform:uppercase;margin-bottom:10px;">What's in your full report</p>
+    <p style="font-family:'Inter',Arial,sans-serif;font-size:9.5pt;color:rgba(255,255,255,0.75);margin-bottom:12px;line-height:1.5;">
+      This is Section 1 of 7. The complete report also includes:
+    </p>
+    <ul style="list-style:none;padding:0;margin:0;">
+      ${['Section 2 — Rewritten listing description (three-part, ready to paste)',
+         'Section 3 — Photo order and selection plan',
+         'Section 4 — 12-month seasonal pricing calendar',
+         'Section 5 — Competitor positioning analysis',
+         'Section 6 — Amenity presentation rewrite',
+         'Section 7 — Guest communication templates (3 ready-to-use)'
+        ].map(item => `<li style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.08);font-family:'Inter',Arial,sans-serif;font-size:9.5pt;color:rgba(255,255,255,0.75);"><span style="color:#E8C840;flex-shrink:0;">•</span><span>${item}</span></li>`).join('')}
+    </ul>
+  </div>
   <div class="title-page-note">Description, photo plan, pricing calendar, competitor analysis, amenity rewrite and guest templates included in the full report.</div>
 </div>
 
 <!-- PAGE 4: OPPORTUNITY + UPSELL -->
 <div class="page opp-page">
   <div class="section-label">The Opportunity</div>
-  <div class="opp-title">What Your Listing Could Achieve</div>
   <div class="gold-rule-2"></div>
-  <div class="opp-para">${escHtml(d.opportunity_summary)}</div>
-  <div class="opp-separator"></div>
-  <div class="upsell-heading">Ready to Fix It?</div>
-  <div class="upsell-body">This audit identified issues holding your listing back. The STR Clinic full report fixes all of them — rewritten title, description, photo plan, 12-month pricing calendar, competitor analysis, amenity rewrite, and guest templates. Everything done for you, ready to paste in.</div>
-  <div class="price-block">
-    <div class="price-amount">£199</div>
-    <div class="price-note">one-off · no subscription</div>
+  <h2 style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:36pt;color:#E8C840;text-transform:uppercase;letter-spacing:0.03em;line-height:1.05;margin-bottom:24px;">
+    Ready to recover that ${extractLowerBound(d.monthly_revenue_gap_estimate || '£200')}/month?
+  </h2>
+  <p style="font-family:'Inter',Arial,sans-serif;font-size:11pt;color:rgba(255,255,255,0.85);line-height:1.7;margin-bottom:28px;max-width:560px;">
+    Your full STR Clinic report addresses every issue identified in this audit — and the six sections we haven't shown you yet. Rewritten copy, photo plan, pricing calendar, competitor analysis, amenity audit, and guest communication templates. All personalised to your listing. All ready to paste in.
+  </p>
+  <div style="margin-bottom:28px;">
+    <p style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:48pt;color:#E8C840;line-height:1;margin-bottom:4px;">£199</p>
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:8pt;color:rgba(255,255,255,0.5);letter-spacing:0.2em;">/ $199 USD</p>
   </div>
-  <div class="cta-pill">Reply to this email to get started</div>
-  <span class="cta-note">No subscription. No ongoing commitment. One payment, everything fixed.</span>
+  <div style="background:rgba(232,200,64,0.1);border-left:4px solid #E8C840;padding:16px 20px;border-radius:2px;margin-bottom:20px;max-width:520px;">
+    <p style="font-family:'Inter',Arial,sans-serif;font-size:10.5pt;color:white;line-height:1.6;margin:0;">
+      Reply to this email to get started. We'll send the invoice and deliver your full report within 5 working days.
+    </p>
+  </div>
+  <p style="font-family:'IBM Plex Mono',monospace;font-size:8pt;color:rgba(255,255,255,0.4);letter-spacing:0.15em;">
+    No subscription. One payment. Everything fixed.
+  </p>
 </div>
 
 <!-- BACK PAGE -->
