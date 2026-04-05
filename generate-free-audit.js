@@ -557,7 +557,7 @@ function buildHtml(d) {
       Based on your listing's location, price, and current performance signals, we estimate your listing is leaving approximately
     </p>
     <p style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:36pt;color:#E8C840;line-height:1.1;margin:4px 0;">
-      ${d.monthly_revenue_gap_estimate || `${sym}200–${sym}400/month`}
+      ${d.monthly_revenue_gap_estimate || (d.overall_score < 50 ? `${sym}180–${sym}320` : `${sym}80–${sym}180`) + '/month'}
     </p>
     <p style="font-family:'IBM Plex Mono',monospace;font-size:9pt;color:#E8C840;opacity:0.8;letter-spacing:0.1em;margin:0;">
       on the table each month.
@@ -588,6 +588,10 @@ function buildHtml(d) {
   <div class="rationale-box">
     <div class="rationale-label">Why This Works</div>
     <div class="rationale-text">${escHtml(d.title_rationale)}</div>
+  </div>
+  <div style="margin:20px 0;display:flex;align-items:center;gap:12px;">
+    <span style="font-family:'Inter',Arial,sans-serif;font-size:9pt;color:#1A1A2E;opacity:0.7;">This is 1 of 7 deliverables in your full STR Clinic report.</span>
+    <a href="${stripeUrl}" style="display:inline-block;background:#E8C840;color:#1A1A2E;font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:11pt;text-transform:uppercase;letter-spacing:0.04em;padding:7px 16px;text-decoration:none;border-radius:3px;white-space:nowrap;">Get all 7 — ${stripePriceLabel}</a>
   </div>
   <div style="margin-top:20px;margin-bottom:4px;">
     <p style="font-family:'IBM Plex Mono',monospace;font-size:7.5pt;color:#E8C840;letter-spacing:0.3em;text-transform:uppercase;margin-bottom:12px;">A glimpse of what else we found</p>
