@@ -177,7 +177,7 @@ function buildHtml(d) {
   .cover-date {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 9px;
-    color: rgba(255,255,255,0.25);
+    color: rgba(255,255,255,0.45);
     text-align: center;
     margin-bottom: 48px;
   }
@@ -525,7 +525,7 @@ function buildHtml(d) {
   .back-copy {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 8px;
-    color: rgba(255,255,255,0.25);
+    color: rgba(255,255,255,0.45);
     text-align: center;
   }
 </style>
@@ -671,6 +671,7 @@ async function main() {
   const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: 'networkidle0' });
+  await new Promise(resolve => setTimeout(resolve, 1500)); // ensure fonts render
   await page.pdf({
     path: outputPath,
     format: 'A4',
