@@ -21,12 +21,36 @@ if (!inputFile) {
 }
 
 const data = JSON.parse(fs.readFileSync(inputFile, 'utf8'));
+const currency = detectCurrency(data);
+const sym = currency.symbol;
 const safeName = data.property_name.replace(/[^a-z0-9]/gi, '-').toLowerCase();
 const outputFile = outputArg || `${safeName}-strclinic-free-audit.pdf`;
 
+/**
+ * Detect currency from listing data.
+ * Priority: explicit currency_code field > listing_url > location string > default GBP
+ * Returns: { symbol: '£'|'$'|'AU$', code: 'GBP'|'USD'|'AUD', name: 'British Pounds'|'US Dollars'|'Australian Dollars' }
+ */
+function detectCurrency(data) {
+  if (data.currency_code) {
+    const map = { GBP: { symbol: '£', code: 'GBP', name: 'British Pounds' }, USD: { symbol: '$', code: 'USD', name: 'US Dollars' }, AUD: { symbol: 'AU$', code: 'AUD', name: 'Australian Dollars' } };
+    return map[data.currency_code.toUpperCase()] || { symbol: '£', code: 'GBP', name: 'British Pounds' };
+  }
+  if (data.listing_url) {
+    if (data.listing_url.includes('airbnb.com.au')) return { symbol: 'AU$', code: 'AUD', name: 'Australian Dollars' };
+    if (data.listing_url.includes('airbnb.co.uk')) return { symbol: '£', code: 'GBP', name: 'British Pounds' };
+    if (data.listing_url.includes('airbnb.com')) return { symbol: '$', code: 'USD', name: 'US Dollars' };
+  }
+  const loc = (data.location || '').toLowerCase();
+  if (/\b(australia|au|nsw|vic|qld|wa|sa|tas|act)\b/.test(loc)) return { symbol: 'AU$', code: 'AUD', name: 'Australian Dollars' };
+  if (/\b(usa|united states|us|new york|los angeles|california|florida|texas)\b/.test(loc)) return { symbol: '$', code: 'USD', name: 'US Dollars' };
+  if (/\b(uk|united kingdom|england|scotland|wales|london|cornwall|devon|yorkshire)\b/.test(loc)) return { symbol: '£', code: 'GBP', name: 'British Pounds' };
+  return { symbol: '£', code: 'GBP', name: 'British Pounds' };
+}
+
 function extractLowerBound(estimate) {
   if (!estimate) return '£199';
-  const match = estimate.match(/£[\d,]+/);
+  const match = estimate.match(/[£$AU]+[\d,]+/);
   return match ? match[0] : estimate;
 }
 
@@ -525,7 +549,7 @@ function buildHtml(d) {
       Based on your listing's location, price, and current performance signals, we estimate your listing is leaving approximately
     </p>
     <p style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:36pt;color:#E8C840;line-height:1.1;margin:4px 0;">
-      ${d.monthly_revenue_gap_estimate || '£200–£400/month'}
+      ${d.monthly_revenue_gap_estimate || `${sym}200–${sym}400/month`}
     </p>
     <p style="font-family:'IBM Plex Mono',monospace;font-size:9pt;color:#E8C840;opacity:0.8;letter-spacing:0.1em;margin:0;">
       on the table each month.
@@ -593,7 +617,7 @@ function buildHtml(d) {
   <div class="section-label">The Opportunity</div>
   <div class="gold-rule-2"></div>
   <h2 style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:36pt;color:#E8C840;text-transform:uppercase;letter-spacing:0.03em;line-height:1.05;margin-bottom:24px;">
-    Ready to recover that ${extractLowerBound(d.monthly_revenue_gap_estimate || '£200')}/month?
+    Ready to recover that ${extractLowerBound(d.monthly_revenue_gap_estimate || `${sym}200`)}/month?
   </h2>
   <p style="font-family:'Inter',Arial,sans-serif;font-size:11pt;color:rgba(255,255,255,0.85);line-height:1.7;margin-bottom:28px;max-width:560px;">
     Your full STR Clinic report addresses every issue identified in this audit — and the six sections we haven't shown you yet. Rewritten copy, photo plan, pricing calendar, competitor analysis, amenity audit, and guest communication templates. All personalised to your listing. All ready to paste in.
