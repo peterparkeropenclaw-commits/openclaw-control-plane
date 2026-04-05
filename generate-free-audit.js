@@ -583,39 +583,13 @@ async function main() {
   await browser.close();
   console.log(`PDF saved: ${outputPath}`);
 
-  // Create Drive folder and upload
-  let folderId = '';
-  try {
-    console.log('Creating Drive folder...');
-    const mkdirOut = execSync(
-      `gog drive mkdir "STR Clinic Free Audits" --account brandon@strclinic.com`,
-      { encoding: 'utf8' }
-    ).trim();
-    // Extract folder ID from output (JSON or plain id)
-    try {
-      const parsed = JSON.parse(mkdirOut);
-      folderId = parsed.id || parsed.folderId || '';
-    } catch {
-      // Try to grab an ID-like string
-      const match = mkdirOut.match(/([a-zA-Z0-9_-]{25,})/);
-      folderId = match ? match[1] : '';
-    }
-    if (!folderId) {
-      console.warn('Could not parse folder ID from output:', mkdirOut);
-    } else {
-      console.log(`Drive folder ID: ${folderId}`);
-    }
-  } catch (err) {
-    console.warn('Drive mkdir failed:', err.message);
-  }
-
+  // Upload to Drive (hardcoded free audits folder)
+  const folderId = '1nMysoqPplQT1S1C4f_Gjj75u_PSVEgpr';
   const uploadName = `${safeName}-strclinic-free-audit.pdf`;
   let driveLink = '';
   try {
     console.log('Uploading to Drive...');
-    const uploadArgs = folderId
-      ? `gog drive upload "${outputPath}" --name "${uploadName}" --parent ${folderId} --account brandon@strclinic.com`
-      : `gog drive upload "${outputPath}" --name "${uploadName}" --account brandon@strclinic.com`;
+    const uploadArgs = `gog drive upload "${outputPath}" --name "${uploadName}" --parent ${folderId} --account brandon@strclinic.com`;
     const uploadOut = execSync(uploadArgs, { encoding: 'utf8' }).trim();
     try {
       const parsed = JSON.parse(uploadOut);
