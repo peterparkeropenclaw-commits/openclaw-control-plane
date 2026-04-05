@@ -57,7 +57,7 @@ function detectCurrency(data) {
 
 
 function extractLowerBound(estimate) {
-  if (!estimate) return '£199';
+  if (!estimate) return stripePriceLabel || '£199';
   const match = estimate.match(/[£$AU]+[\d,]+/);
   return match ? match[0] : estimate;
 }
@@ -631,8 +631,7 @@ function buildHtml(d) {
     Your full STR Clinic report addresses every issue identified in this audit — and the six sections we haven't shown you yet. Rewritten copy, photo plan, pricing calendar, competitor analysis, amenity audit, and guest communication templates. All personalised to your listing. All ready to paste in.
   </p>
   <div style="margin-bottom:28px;">
-    <p style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:48pt;color:#E8C840;line-height:1;margin-bottom:4px;">£199</p>
-    <p style="font-family:'IBM Plex Mono',monospace;font-size:8pt;color:rgba(255,255,255,0.5);letter-spacing:0.2em;">/ $199 USD</p>
+    <p style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:48pt;color:#E8C840;line-height:1;margin-bottom:4px;">${stripePriceLabel}</p>
   </div>
   <a href="${stripeUrl}" style="display:inline-block;background:#E8C840;color:#1A1A2E;font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:18pt;text-transform:uppercase;letter-spacing:0.04em;padding:16px 40px;border-radius:4px;text-decoration:none;margin-bottom:16px;">
     GET YOUR FULL REPORT — ${stripePriceLabel}
