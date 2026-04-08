@@ -77,15 +77,12 @@ function escHtml(str) {
 
 function buildHtml(d) {
   const issuesHtml = (d.top_3_issues || []).map((item, i, arr) => `
-    <div class="issue-block">
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#E8C840;letter-spacing:0.35em;text-transform:uppercase;margin-bottom:6px;">
-        Finding ${i + 1} of 3
-      </div>
-      <div class="issue-name">${escHtml(item.issue)}</div>
-      <div class="issue-desc">${escHtml(item.description)}</div>
-      <div class="issue-impact">${escHtml(item.revenue_impact)}</div>
-    </div>
-    ${i < arr.length - 1 ? '<hr class="issue-divider">' : ''}
+  <div style="background:#fff;border:1px solid rgba(232,200,64,0.3);border-left:4px solid #E8C840;border-radius:3px;padding:16px 20px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:7.5px;color:#E8C840;letter-spacing:0.35em;text-transform:uppercase;margin-bottom:8px;">Finding ${i + 1} of 3</div>
+    <div style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:700;font-size:14pt;color:#1A1A2E;text-transform:uppercase;margin-bottom:8px;">${escHtml(item.issue)}</div>
+    <div style="font-family:'Inter',Arial,sans-serif;font-size:14px;line-height:1.65;color:#1A1A2E;margin-bottom:8px;">${escHtml(item.description)}</div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(26,26,46,0.45);letter-spacing:0.1em;">${escHtml(item.revenue_impact)}</div>
+  </div>
   `).join('');
 
   return `<!DOCTYPE html>
@@ -94,16 +91,22 @@ function buildHtml(d) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>STR Clinic Free Audit — ${escHtml(d.property_name)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;900&family=IBM+Plex+Mono:wght@400&family=Inter:wght@400;500&display=swap" rel="stylesheet">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;900&family=IBM+Plex+Mono:wght@400&family=Inter:wght@400;500&display=swap');
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Inter', Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.65;
+    color: #1A1A2E;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+
+  p { font-size: 14px; line-height: 1.65; margin-bottom: 12px; }
 
   .page {
     width: 210mm;
@@ -557,20 +560,12 @@ function buildHtml(d) {
 <!-- PAGE 2: SCORE + TOP 3 ISSUES -->
 <div class="page score-page">
   <div class="section-label">Listing Health Score</div>
-  <div>
-    <span class="score-number">${d.overall_score}</span><span class="score-suffix">/100</span>
+  <div style="background:#1A1A2E;border-radius:4px;padding:32px 40px;text-align:center;margin:28px 0;">
+    <div style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:80pt;color:#E8C840;line-height:1;letter-spacing:-0.03em;">${d.overall_score}<span style="font-size:24pt;color:rgba(232,200,64,0.5);">/100</span></div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:rgba(255,255,255,0.5);letter-spacing:0.2em;margin-top:6px;">Overall listing score</div>
+    <div style="font-family:'Inter',Arial,sans-serif;font-size:12px;color:rgba(255,255,255,0.55);margin-top:8px;line-height:1.5;">The average optimised listing scores <strong style="color:#E8C840;">74/100</strong>. Every month at this score, your listing is leaving approximately <strong style="color:#E8C840;">${d.monthly_revenue_gap_estimate || (d.overall_score < 50 ? `${sym}180–${sym}320` : `${sym}80–${sym}180`) + '/month'}</strong> on the table.</div>
   </div>
   <div class="score-narrative">${escHtml(d.score_narrative)}</div>
-  <div style="text-align:center;margin-bottom:8px;">
-    <p style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(255,255,255,0.55);letter-spacing:0.15em;margin:0;">
-      The average optimised listing scores <strong style="color:#E8C840;">74/100</strong>. Your listing currently scores <strong style="color:#E8C840;">${d.overall_score}/100</strong>.
-    </p>
-  </div>
-  <div style="text-align:center;margin-bottom:24px;">
-    <p style="font-family:'Inter',Arial,sans-serif;font-size:13px;color:rgba(255,255,255,0.7);line-height:1.55;margin:0;">
-      Every month at this score, your listing is leaving approximately <strong style="color:#E8C840;">${d.monthly_revenue_gap_estimate || (d.overall_score < 50 ? `${sym}180–${sym}320` : `${sym}80–${sym}180`) + '/month'}</strong> on the table.
-    </p>
-  </div>
   <div class="gold-rule"></div>
   <div class="issues-label">Top 3 Issues Identified</div>
   ${issuesHtml}
@@ -583,11 +578,17 @@ function buildHtml(d) {
   <div class="title-page-title">Here's What Your Title Could Look Like</div>
   <div class="gold-rule-2"></div>
   <div class="block-label">Current Title</div>
-  <div class="before-box">${escHtml(d.current_title)}</div>
+  <div style="background:#efefef;border-left:3px solid #bbb;padding:13px 18px;border-radius:2px;margin-bottom:6px;">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;color:#888;letter-spacing:0.3em;text-transform:uppercase;margin-bottom:5px;">Before — Current title</div>
+    <div style="font-size:13px;color:#555;font-style:italic;">${escHtml(d.current_title)}</div>
+  </div>
   <div class="after-label-row">
     <span class="after-label-pill">Ready to Paste</span>
   </div>
-  <div class="after-box">${escHtml(d.rewritten_title)}</div>
+  <div style="background:#fdfbf0;border:1px solid rgba(232,200,64,0.4);border-left:4px solid #E8C840;padding:13px 18px;border-radius:2px;margin-bottom:18px;">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;color:#E8C840;letter-spacing:0.3em;text-transform:uppercase;margin-bottom:8px;">✓ Recommended title</div>
+    <div style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:17pt;color:#1A1A2E;text-transform:uppercase;letter-spacing:0.02em;">${escHtml(d.rewritten_title)}</div>
+  </div>
   <div class="rationale-box">
     <div class="rationale-label">Why This Works</div>
     <div class="rationale-text">${escHtml(d.title_rationale)}</div>
