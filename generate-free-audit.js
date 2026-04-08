@@ -7,8 +7,8 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const STRIPE_LINKS = {
-  GBP: 'https://buy.stripe.com/PLACEHOLDER_UK',
-  USD: 'https://buy.stripe.com/PLACEHOLDER_US',
+  GBP: 'https://buy.stripe.com/aFa7sK0QV6sb8tjaQ7cfK00',
+  USD: 'https://buy.stripe.com/aFa7sK0QV6sb8tjaQ7cfK00',
 };
 
 const args = process.argv.slice(2);
@@ -30,6 +30,9 @@ const currency = detectCurrency(data);
 const sym = currency.symbol;
 const stripeUrl = STRIPE_LINKS[currency.code] || STRIPE_LINKS.GBP;
 const stripePriceLabel = currency.code === 'USD' ? '$199' : '£199';
+const gapStr = data.monthly_revenue_gap_estimate || '£180–£320/month';
+const gapMatch = gapStr.match(/[£$][\d,]+/);
+data.monthly_gap_lower = gapMatch ? gapMatch[0] : `${sym}180`;
 const safeName = data.property_name.replace(/[^a-z0-9]/gi, '-').toLowerCase();
 const outputFile = outputArg || `${safeName}-strclinic-free-audit.pdf`;
 
@@ -75,6 +78,9 @@ function escHtml(str) {
 function buildHtml(d) {
   const issuesHtml = (d.top_3_issues || []).map((item, i, arr) => `
     <div class="issue-block">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#E8C840;letter-spacing:0.35em;text-transform:uppercase;margin-bottom:6px;">
+        Finding ${i + 1} of 3
+      </div>
       <div class="issue-name">${escHtml(item.issue)}</div>
       <div class="issue-desc">${escHtml(item.description)}</div>
       <div class="issue-impact">${escHtml(item.revenue_impact)}</div>
@@ -539,6 +545,9 @@ function buildHtml(d) {
   <div class="cover-subtitle">Listing Health Audit</div>
   <div class="cover-property">${escHtml(d.property_name)}</div>
   <div class="cover-location">${escHtml(d.location)}</div>
+  <p style="font-family:'Inter',Arial,sans-serif;font-size:13px;color:rgba(255,255,255,0.65);line-height:1.5;margin-bottom:28px;font-style:italic;">
+    Your listing health audit — prepared specifically for ${escHtml(d.property_name)} by Brandon at STR Clinic. Not automated. Not a template.
+  </p>
   <div class="cover-spacer"></div>
   <div class="cover-from">From Brandon, Founder at STR Clinic</div>
   <div class="cover-date">${escHtml(d.date)}</div>
@@ -552,20 +561,14 @@ function buildHtml(d) {
     <span class="score-number">${d.overall_score}</span><span class="score-suffix">/100</span>
   </div>
   <div class="score-narrative">${escHtml(d.score_narrative)}</div>
-  <div style="text-align:center;margin:20px 0 8px;">
-    <p style="font-family:'IBM Plex Mono',monospace;font-size:10pt;color:#E8C840;font-weight:600;letter-spacing:0.05em;margin:0;">
-      Based on your listing's location, price, and current performance signals, we estimate your listing is leaving approximately
-    </p>
-    <p style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:36pt;color:#E8C840;line-height:1.1;margin:4px 0;">
-      ${d.monthly_revenue_gap_estimate || (d.overall_score < 50 ? `${sym}180–${sym}320` : `${sym}80–${sym}180`) + '/month'}
-    </p>
-    <p style="font-family:'IBM Plex Mono',monospace;font-size:9pt;color:#E8C840;opacity:0.8;letter-spacing:0.1em;margin:0;">
-      on the table each month.
+  <div style="text-align:center;margin-bottom:8px;">
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(255,255,255,0.55);letter-spacing:0.15em;margin:0;">
+      The average optimised listing scores <strong style="color:#E8C840;">74/100</strong>. Your listing currently scores <strong style="color:#E8C840;">${d.overall_score}/100</strong>.
     </p>
   </div>
-  <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);padding:12px 18px;border-radius:2px;margin-bottom:28px;text-align:center;">
-    <p style="font-family:'Inter',Arial,sans-serif;font-size:9pt;color:rgba(255,255,255,0.65);line-height:1.6;margin:0;font-style:italic;">
-      The average STR Clinic audit scores 58/100. Listings scoring below 50 typically underperform their local market by 20–30% on occupancy.
+  <div style="text-align:center;margin-bottom:24px;">
+    <p style="font-family:'Inter',Arial,sans-serif;font-size:13px;color:rgba(255,255,255,0.7);line-height:1.55;margin:0;">
+      Every month at this score, your listing is leaving approximately <strong style="color:#E8C840;">${d.monthly_revenue_gap_estimate || (d.overall_score < 50 ? `${sym}180–${sym}320` : `${sym}80–${sym}180`) + '/month'}</strong> on the table.
     </p>
   </div>
   <div class="gold-rule"></div>
@@ -625,30 +628,58 @@ function buildHtml(d) {
 </div>
 
 <!-- PAGE 4: OPPORTUNITY + UPSELL -->
-<div class="page opp-page">
-  <div class="section-label">The Opportunity</div>
-  <div class="gold-rule-2"></div>
-  <h2 style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:36pt;color:#E8C840;text-transform:uppercase;letter-spacing:0.03em;line-height:1.05;margin-bottom:24px;">
-    Ready to recover that ${extractLowerBound(d.monthly_revenue_gap_estimate || `${sym}200`)}/month?
-  </h2>
-  <p style="font-family:'Inter',Arial,sans-serif;font-size:11pt;color:rgba(255,255,255,0.85);line-height:1.7;margin-bottom:28px;max-width:560px;">
-    Your full STR Clinic report addresses every issue identified in this audit — and the six sections we haven't shown you yet. Rewritten copy, photo plan, pricing calendar, competitor analysis, amenity audit, and guest communication templates. All personalised to your listing. All ready to paste in.
-  </p>
-  <div style="margin-bottom:28px;">
-    <p style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:48pt;color:#E8C840;line-height:1;margin-bottom:4px;">${stripePriceLabel}</p>
+<div class="page" style="background:#1A1A2E;padding:56px 64px;min-height:100vh;display:flex;flex-direction:column;justify-content:space-between;">
+  <div>
+    <div style="margin-bottom:24px;">
+      <p style="font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:22pt;color:#fff;text-transform:uppercase;line-height:1.1;letter-spacing:0.01em;margin-bottom:8px;">
+        Your listing scored ${d.overall_score}/100.<br>The average optimised listing scores 74/100.
+      </p>
+      <p style="font-family:'Inter',Arial,sans-serif;font-size:14px;color:rgba(255,255,255,0.7);line-height:1.6;margin:0;">
+        That gap costs you <strong style="color:#E8C840;">${d.monthly_revenue_gap_estimate || `${sym}180–${sym}320/month`}</strong> every month. Here's what closes it.
+      </p>
+    </div>
+
+    <div style="background:rgba(255,255,255,0.06);border-left:4px solid #E8C840;padding:16px 20px;border-radius:2px;margin-bottom:20px;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;color:#E8C840;letter-spacing:0.3em;text-transform:uppercase;margin-bottom:10px;">What the full report gives you</div>
+      <p style="font-family:'Inter',Arial,sans-serif;font-size:13px;color:rgba(255,255,255,0.85);line-height:1.65;margin:0;">
+        A rewritten title, description, photo sequence plan, 12-month pricing calendar, competitor analysis, and guest communication templates — all ready to paste in. Everything specific to your listing. Nothing generic.
+      </p>
+    </div>
+
+    <div style="background:rgba(232,200,64,0.08);border:1px solid rgba(232,200,64,0.2);padding:14px 18px;border-radius:2px;margin-bottom:24px;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;color:#E8C840;letter-spacing:0.3em;text-transform:uppercase;margin-bottom:6px;">Our guarantee</div>
+      <p style="font-family:'Inter',Arial,sans-serif;font-size:13px;color:rgba(255,255,255,0.8);line-height:1.6;margin:0;">
+        If you implement the recommendations and don't see improvement, we'll refund every penny. No forms. No conditions. Just reply to the email.
+      </p>
+    </div>
+
+    <p style="font-family:'Inter',Arial,sans-serif;font-size:13px;color:rgba(255,255,255,0.6);line-height:1.5;margin-bottom:20px;">
+      The full report is <strong style="color:#E8C840;">£199/$199</strong> — less than one night's revenue at your current rate.
+    </p>
+
+    <div style="display:flex;justify-content:center;margin-bottom:14px;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:rgba(255,255,255,0.5);letter-spacing:0.2em;background:rgba(255,255,255,0.06);padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);">
+        30-day money-back guarantee · No questions asked
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-bottom:12px;">
+      <a href="${stripeUrl}" style="display:inline-block;background:#E8C840;color:#1A1A2E;font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:17pt;text-transform:uppercase;letter-spacing:0.03em;padding:14px 36px;border-radius:4px;text-decoration:none;line-height:1;">
+        Recover that ${d.monthly_gap_lower || extractLowerBound(d.monthly_revenue_gap_estimate || `${sym}180`)}/month — ${stripePriceLabel}
+      </a>
+    </div>
+
+    <p style="font-family:'Inter',Arial,sans-serif;font-size:11px;color:rgba(255,255,255,0.35);text-align:center;margin-bottom:0;">
+      Or reply directly to this email and we'll send you the invoice.
+    </p>
+
   </div>
-  <a href="${stripeUrl}" style="display:inline-block;background:#E8C840;color:#1A1A2E;font-family:'Barlow Condensed',Arial,sans-serif;font-weight:900;font-size:18pt;text-transform:uppercase;letter-spacing:0.04em;padding:16px 40px;border-radius:4px;text-decoration:none;margin-bottom:16px;">
-    GET YOUR FULL REPORT — ${stripePriceLabel}
-  </a>
-  <p style="font-family:'Inter',Arial,sans-serif;font-size:10pt;color:rgba(255,255,255,0.65);line-height:1.6;margin-bottom:20px;max-width:480px;">
-    Click above to go directly to secure checkout. Your report will be delivered by email within 5 working days of payment.
-  </p>
-  <p style="font-family:'IBM Plex Mono',monospace;font-size:8pt;color:rgba(255,255,255,0.4);letter-spacing:0.15em;">
-    No subscription. One payment. Everything fixed.
-  </p>
-  <p style="font-family:'IBM Plex Mono',monospace;font-size:7pt;color:rgba(255,255,255,0.3);letter-spacing:0.05em;margin-top:12px;">
-    Or reply directly to this email and we'll send you the invoice.
-  </p>
+
+  <div style="border-top:1px solid rgba(232,200,64,0.15);padding-top:14px;text-align:center;">
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:rgba(255,255,255,0.35);letter-spacing:0.15em;">
+      Reviewed personally by Brandon · STR Clinic · strclinic.com
+    </p>
+  </div>
 </div>
 
 <!-- BACK PAGE -->
@@ -683,19 +714,21 @@ async function main() {
   // Upload to Drive (hardcoded free audits folder)
   const folderId = '1nMysoqPplQT1S1C4f_Gjj75u_PSVEgpr';
   const uploadName = `${safeName}-strclinic-free-audit.pdf`;
+  const { google } = require('/Users/robotmac/workspace/str-clinic-pdf-generator/node_modules/googleapis');
   let driveLink = '';
   try {
-    console.log('Uploading to Drive...');
-    const uploadArgs = `gog drive upload "${outputPath}" --name "${uploadName}" --parent ${folderId} --account brandon@strclinic.com`;
-    const uploadOut = execSync(uploadArgs, { encoding: 'utf8' }).trim();
-    try {
-      const parsed = JSON.parse(uploadOut);
-      driveLink = parsed.webViewLink || parsed.link || parsed.url || '';
-    } catch {
-      const match = uploadOut.match(/https:\/\/[^\s]+/);
-      driveLink = match ? match[0] : uploadOut;
-    }
-  } catch (err) {
+    console.log('Uploading to Drive via OAuth2...');
+    const oauthConfig = JSON.parse(fs.readFileSync('/tmp/gog-oauth-config.json', 'utf8'));
+    const oauth2Client = new google.auth.OAuth2(oauthConfig.client_id, oauthConfig.client_secret, 'urn:ietf:wg:oauth:2.0:oob');
+    oauth2Client.setCredentials({ refresh_token: oauthConfig.refresh_token });
+    const drive = google.drive({ version: 'v3', auth: oauth2Client });
+    const response = await drive.files.create({
+      requestBody: { name: uploadName, parents: [folderId] },
+      media: { mimeType: 'application/pdf', body: fs.createReadStream(outputPath) },
+      fields: 'id,webViewLink',
+    });
+    driveLink = response.data.webViewLink || `https://drive.google.com/file/d/${response.data.id}/view`;
+    } catch (err) {
     console.warn('Drive upload failed:', err.message);
   }
 
