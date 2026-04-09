@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>STR Clinic — Free Listing Audit</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;0,700;0,900;1,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --navy:#1A1A2E;
+  --navy-mid:#1E2340;
+  --gold:#E8C840;
+  --white:#FFFFFF;
+  --off-white:#F0EBE0;
+  --page-lt:#F4F2EE;
+  --text:#111827;
+  --text-muted:#374151;
+  --text-faint:#6B7280;
+  --page-pad:52px 64px;
+}
+body{font-family:'Inter',sans-serif;font-size:14px;color:var(--text);background:#fff;line-height:1.65;}
+p{margin-bottom:12px;font-size:14px;line-height:1.65;}
+p:last-child{margin-bottom:0;}
+.page{break-after:page;page-break-after:always;position:relative;min-height:297mm;}
+.page:last-of-type{break-after:auto;page-break-after:auto;}
+@media print{
+  body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .page{break-after:page;page-break-after:always;min-height:297mm;}
+  .page:last-of-type{break-after:auto;page-break-after:auto;}
+  @page{margin:0;size:A4;}
+}
+
+/* ── TYPE ── */
+.bc{font-family:'Barlow Condensed',sans-serif;font-weight:900;text-transform:uppercase;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+
+/* ── FOOTER ── */
+.page-foot{position:absolute;bottom:0;left:0;right:0;height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 64px;}
+.page-foot--dk{border-top:1px solid rgba(232,200,64,0.12);}
+.page-foot--lt{border-top:1px solid rgba(26,26,46,0.1);}
+.pf-brand{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:0.22em;text-transform:uppercase;}
+.pf-brand--dk{color:rgba(255,255,255,0.28);}
+.pf-brand--lt{color:rgba(26,26,46,0.28);}
+.pf-pg{font-family:'IBM Plex Mono',monospace;font-size:8px;color:rgba(232,200,64,0.5);letter-spacing:0.18em;}
+.pf-tag{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:0.14em;text-transform:uppercase;}
+.pf-tag--dk{color:rgba(255,255,255,0.18);}
+.pf-tag--lt{color:rgba(26,26,46,0.18);}
+
+/* ── SECTION CHROME ── */
+.sec-num{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7A5C00;letter-spacing:0.22em;text-transform:uppercase;margin-bottom:5px;font-weight:600;}
+.sec-num--inv{color:rgba(232,200,64,0.6);}
+.sec-h{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:30pt;text-transform:uppercase;letter-spacing:0.01em;color:var(--navy);margin-bottom:8px;line-height:1;}
+.sec-h--inv{color:#fff;}
+.rule{height:2px;background:var(--gold);margin-bottom:24px;}
+.sub{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:14pt;text-transform:uppercase;letter-spacing:0.02em;color:var(--navy);margin:20px 0 10px;border-left:3px solid var(--gold);padding-left:10px;}
+.sub--inv{color:#fff;border-left-color:rgba(232,200,64,0.4);}
+
+/* ── PAGE TYPES ── */
+.bg-dk{background:var(--navy);color:#fff;padding:var(--page-pad);padding-bottom:56px;}
+.bg-lt{background:var(--page-lt);color:var(--text);padding:var(--page-pad);padding-bottom:56px;border-top:3px solid var(--gold);}
+
+/* ═══════════════════════════
+   COVER — PAGE 1
+═══════════════════════════ */
+.cover{
+  background:var(--navy);min-height:297mm;
+  padding:52px 64px 44px;
+  display:flex;flex-direction:column;
+  position:relative;overflow:hidden;
+}
+.cover::before{
+  content:'';position:absolute;inset:0;
+  background-image:linear-gradient(rgba(232,200,64,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(232,200,64,0.03) 1px,transparent 1px);
+  background-size:40px 40px;pointer-events:none;
+}
+.cover::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--gold);}
+
+.cover-brand{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32pt;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px;position:relative;z-index:1;}
+.cover-sub{font-family:'IBM Plex Mono',monospace;font-size:8px;color:rgba(255,255,255,0.4);letter-spacing:0.25em;text-transform:uppercase;position:relative;z-index:1;}
+.cover-divider{height:1px;background:rgba(232,200,64,0.15);margin:18px 0;position:relative;z-index:1;}
+
+.cover-prop{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32pt;color:#fff;text-transform:uppercase;letter-spacing:0.02em;line-height:1;margin-bottom:5px;max-width:520px;position:relative;z-index:1;}
+.cover-loc{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--gold);letter-spacing:0.18em;text-transform:uppercase;opacity:0.85;margin-bottom:20px;position:relative;z-index:1;}
+
+/* score */
+.cover-score-row{display:flex;align-items:flex-end;gap:28px;margin-bottom:18px;position:relative;z-index:1;}
+.cover-score-num{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:96pt;color:var(--gold);line-height:0.85;letter-spacing:-0.04em;}
+.cover-score-denom{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26pt;color:rgba(232,200,64,0.38);}
+.cover-score-meta{padding-bottom:12px;}
+.cover-score-lbl{font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(255,255,255,0.45);letter-spacing:0.28em;text-transform:uppercase;margin-bottom:6px;}
+.cover-score-bench{font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.1em;margin-bottom:4px;}
+
+/* pillar bars */
+.pillar-section{margin-bottom:14px;position:relative;z-index:1;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);}
+.pillar-row{display:flex;align-items:center;gap:12px;margin-bottom:7px;position:relative;z-index:1;}
+.pillar-lbl{font-family:'IBM Plex Mono',monospace;font-size:8.5px;color:rgba(255,255,255,0.42);letter-spacing:0.1em;text-transform:uppercase;width:108px;flex-shrink:0;}
+.pillar-track{flex:1;height:5px;background:rgba(255,255,255,0.07);border-radius:3px;position:relative;}
+.pillar-fill{height:5px;border-radius:3px;position:absolute;top:0;left:0;}
+.pillar-fill--gold{background:var(--gold);}
+.pillar-fill--warn{background:#E8903A;}
+.pillar-fill--low{background:#C0392B;}
+.pillar-avg{position:absolute;top:-4px;height:13px;width:2px;background:rgba(255,255,255,0.18);left:54%;}
+.pillar-val{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11pt;width:36px;text-align:right;flex-shrink:0;}
+.pillar-val--gold{color:var(--gold);}
+.pillar-val--warn{color:#E8903A;}
+.pillar-val--low{color:#E07070;}
+
+/* insight block */
+.insight{background:rgba(232,200,64,0.07);border:1px solid rgba(232,200,64,0.18);border-left:4px solid var(--gold);padding:14px 18px;border-radius:2px;margin-bottom:14px;position:relative;z-index:1;}
+.insight-lbl{font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(232,200,64,0.7);letter-spacing:0.22em;text-transform:uppercase;margin-bottom:6px;font-weight:600;}
+.insight-txt{font-size:13px;color:rgba(255,255,255,0.8);line-height:1.6;}
+.insight-action{font-size:12px;color:rgba(255,255,255,0.45);margin-top:6px;font-style:italic;}
+
+/* free tip — warmer, gift-feel, distinct from diagnostic insight */
+.free-tip{background:rgba(232,200,64,0.05);border:1px solid rgba(232,200,64,0.14);border-radius:2px;padding:13px 18px;margin-bottom:14px;position:relative;z-index:1;display:flex;gap:14px;align-items:flex-start;}
+.free-tip-icon{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18pt;color:rgba(232,200,64,0.25);flex-shrink:0;line-height:1;padding-top:2px;}
+.free-tip-inner{}
+.free-tip-lbl{font-family:'IBM Plex Mono',monospace;font-size:8px;color:rgba(232,200,64,0.55);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:4px;}
+.free-tip-txt{font-size:12.5px;color:rgba(255,255,255,0.68);line-height:1.58;}
+
+/* cover upsell bar */
+.cover-upsell{background:var(--gold);border-radius:2px;padding:13px 20px;display:flex;align-items:center;justify-content:space-between;margin-bottom:0;position:relative;z-index:1;}
+.cover-upsell-l{}
+.cover-upsell-lbl{font-family:'IBM Plex Mono',monospace;font-size:8px;color:rgba(60,45,0,0.65);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:3px;}
+.cover-upsell-txt{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13pt;color:var(--navy);text-transform:uppercase;letter-spacing:0.01em;line-height:1.2;}
+.cover-upsell-price{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:26pt;color:var(--navy);line-height:1;}
+
+.cover-footer{margin-top:auto;padding-top:14px;border-top:1px solid rgba(232,200,64,0.12);display:flex;justify-content:space-between;align-items:flex-end;position:relative;z-index:1;}
+.cover-footer-l{font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:0.08em;line-height:1.9;}
+.cover-footer-r{font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(232,200,64,0.5);letter-spacing:0.08em;text-align:right;}
+
+/* ═══════════════════════════
+   PAGE 2 — PLATFORM OPPORTUNITY
+═══════════════════════════ */
+.opp-banner{background:rgba(232,200,64,0.08);border:1px solid rgba(232,200,64,0.2);border-left:4px solid var(--gold);padding:18px 22px;border-radius:2px;margin-bottom:20px;}
+.opp-banner-lbl{font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(232,200,64,0.7);letter-spacing:0.24em;text-transform:uppercase;margin-bottom:6px;}
+.opp-banner-val{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:34pt;color:var(--gold);line-height:1;margin-bottom:4px;}
+.opp-banner-desc{font-size:13px;color:rgba(255,255,255,0.65);line-height:1.55;}
+
+.platform-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:2px;padding:14px 18px;margin-bottom:10px;}
+.platform-card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.platform-name{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13pt;color:#fff;text-transform:uppercase;letter-spacing:0.02em;}
+.platform-badge{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:0.16em;text-transform:uppercase;padding:3px 10px;border-radius:20px;}
+.platform-badge--live{background:rgba(232,200,64,0.15);color:rgba(232,200,64,0.8);}
+.platform-badge--opp{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.32);}
+.platform-desc{font-size:12.5px;color:rgba(255,255,255,0.58);line-height:1.55;margin-bottom:5px;}
+.platform-tip-inline{font-size:12px;color:rgba(232,200,64,0.65);font-family:'IBM Plex Mono',monospace;letter-spacing:0.06em;}
+
+.key-truth{background:var(--gold);padding:15px 20px;border-radius:2px;margin:18px 0;}
+.key-truth-lbl{font-family:'IBM Plex Mono',monospace;font-size:8px;color:rgba(60,45,0,0.65);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:4px;font-weight:600;}
+.key-truth-txt{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13pt;color:var(--navy);text-transform:uppercase;letter-spacing:0.01em;line-height:1.35;}
+
+.one-thing{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-left:4px solid rgba(255,255,255,0.3);padding:16px 20px;border-radius:2px;margin-bottom:16px;}
+.one-thing-lbl{font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(255,255,255,0.4);letter-spacing:0.22em;text-transform:uppercase;margin-bottom:8px;}
+.one-thing-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:14pt;color:#fff;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.02em;}
+.one-thing-body{font-size:13px;color:rgba(255,255,255,0.72);line-height:1.6;}
+
+.locked-row{display:flex;align-items:flex-start;gap:16px;padding:12px 16px;background:rgba(232,200,64,0.05);border:1px solid rgba(232,200,64,0.14);border-left:3px solid rgba(232,200,64,0.35);border-radius:2px;margin-bottom:8px;}
+.locked-num{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20pt;color:rgba(232,200,64,0.18);line-height:1;flex-shrink:0;width:24px;padding-top:2px;}
+.locked-body{flex:1;}
+.locked-title{font-size:13px;color:rgba(255,255,255,0.6);font-weight:600;line-height:1.4;}
+.locked-desc{font-size:11.5px;color:rgba(255,255,255,0.28);font-style:italic;margin-top:3px;line-height:1.45;}
+
+/* ═══════════════════════════
+   PAGE 3 — PERSONAL + CTA
+═══════════════════════════ */
+.brandon-note{background:#fff;border:1px solid #D4C8A0;border-left:4px solid var(--gold);border-radius:2px;padding:20px 22px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
+.brandon-note-lbl{font-family:'IBM Plex Mono',monospace;font-size:9px;color:#7A5C00;letter-spacing:0.22em;text-transform:uppercase;margin-bottom:10px;font-weight:600;}
+.brandon-note-body{font-size:13.5px;color:var(--text);line-height:1.7;}
+.brandon-note-sig{margin-top:14px;padding-top:12px;border-top:1px solid rgba(26,26,46,0.1);}
+.brandon-note-sig-name{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:14pt;color:var(--navy);text-transform:uppercase;letter-spacing:0.02em;}
+.brandon-note-sig-title{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-faint);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;}
+
+.wyg-block{background:#FFFBEA;border:1px solid #D4C070;border-radius:2px;padding:16px 20px;margin-bottom:18px;}
+.wyg-lbl{font-family:'IBM Plex Mono',monospace;font-size:9px;color:#7A5C00;letter-spacing:0.24em;text-transform:uppercase;margin-bottom:12px;font-weight:600;}
+.wyg-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.wyg-item{display:flex;gap:10px;align-items:flex-start;padding:6px 0;}
+.wyg-check{color:#C4A020;font-weight:700;font-size:13px;flex-shrink:0;padding-top:1px;}
+.wyg-txt{font-size:12.5px;color:var(--text);line-height:1.5;}
+.wyg-txt strong{color:var(--navy);font-weight:600;}
+
+.process-row{display:flex;gap:0;margin-bottom:16px;}
+.process-steps{display:flex;flex-direction:column;gap:10px;flex:1;}
+.process-step{display:flex;gap:16px;background:#fff;border:1px solid #D4C8A0;border-left:4px solid var(--gold);border-radius:2px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.04);}
+.process-n{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22pt;color:rgba(232,200,64,0.28);line-height:1;flex-shrink:0;width:30px;}
+.process-body{}
+.process-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:12pt;color:var(--navy);text-transform:uppercase;letter-spacing:0.02em;margin-bottom:2px;}
+.process-desc{font-size:12px;color:var(--text-muted);line-height:1.5;}
+.process-time{font-family:'IBM Plex Mono',monospace;font-size:8px;color:#7A5C00;letter-spacing:0.14em;text-transform:uppercase;margin-top:4px;}
+
+.cta-block{background:var(--navy);border-radius:2px;padding:26px 32px;text-align:center;position:relative;overflow:hidden;margin-top:18px;}
+.cta-block::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(232,200,64,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(232,200,64,0.025) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;}
+.cta-block::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--gold);}
+.cta-lbl{font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(232,200,64,0.6);letter-spacing:0.24em;text-transform:uppercase;margin-bottom:6px;position:relative;z-index:1;}
+.cta-price{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:48pt;color:var(--gold);line-height:1;position:relative;z-index:1;margin-bottom:3px;}
+.cta-price-sub{font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(255,255,255,0.35);letter-spacing:0.14em;margin-bottom:18px;position:relative;z-index:1;}
+.cta-btn{display:inline-block;background:var(--gold);color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:15pt;text-transform:uppercase;letter-spacing:0.06em;padding:13px 42px;border-radius:2px;text-decoration:none;position:relative;z-index:1;}
+.cta-url{font-family:'IBM Plex Mono',monospace;font-size:8px;color:rgba(255,255,255,0.22);letter-spacing:0.12em;margin-top:10px;position:relative;z-index:1;}
+.cta-note{font-family:'Inter',sans-serif;font-size:11.5px;color:rgba(255,255,255,0.38);margin-top:8px;position:relative;z-index:1;font-style:italic;}
+</style>
+</head>
+<body>
+
+
+<!-- ═══════════════════════════════════════════════════
+     PAGE 1 — SCORE + GENUINE INSIGHTS
+═══════════════════════════════════════════════════ -->
+<div class="page cover">
+
+  <div>
+    <div class="cover-brand">STR Clinic</div>
+    <div class="cover-sub">Free Listing Audit &nbsp;·&nbsp; strclinic.com</div>
+  </div>
+
+  <div class="cover-divider"></div>
+
+  <div style="position:relative;z-index:1;margin-bottom:18px;">
+    <div class="cover-prop">{{PROPERTY_NAME}}</div>
+    <div class="cover-loc">{{LOCATION}}</div>
+  </div>
+
+  <!-- Score -->
+  <div class="cover-score-row">
+    <div>
+      <div class="cover-score-num">{{SCORE}}<span class="cover-score-denom">/100</span></div>
+    </div>
+    <div class="cover-score-meta">
+      <div class="cover-score-lbl">Overall listing score</div>
+      <div class="cover-score-bench">Market average: 54/100 &nbsp;·&nbsp; You: {{SCORE}}/100</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(255,255,255,0.25);letter-spacing:0.1em;margin-top:4px;">Based on 5 dimensions assessed below</div>
+    </div>
+  </div>
+
+  <!-- Pillar bars -->
+  <div class="pillar-section">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:rgba(232,200,64,0.45);letter-spacing:0.22em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:16px;">
+      <span>Score by dimension</span>
+      <span style="display:flex;align-items:center;gap:6px;"><span style="display:inline-block;width:2px;height:10px;background:rgba(255,255,255,0.18);"></span>Market avg.</span>
+    </div>
+    <div class="pillar-row">
+      <div class="pillar-lbl">Title</div>
+      <div class="pillar-track"><div class="pillar-fill pillar-fill--warn" style="width:{{TITLE_PCT}}%;"></div><div class="pillar-avg"></div></div>
+      <div class="pillar-val pillar-val--warn">{{TITLE_SCORE}}</div>
+    </div>
+    <div class="pillar-row">
+      <div class="pillar-lbl">Description</div>
+      <div class="pillar-track"><div class="pillar-fill pillar-fill--gold" style="width:{{DESC_PCT}}%;"></div><div class="pillar-avg"></div></div>
+      <div class="pillar-val pillar-val--gold">{{DESC_SCORE}}</div>
+    </div>
+    <div class="pillar-row">
+      <div class="pillar-lbl">Photos</div>
+      <div class="pillar-track"><div class="pillar-fill pillar-fill--warn" style="width:{{PHOTO_PCT}}%;"></div><div class="pillar-avg"></div></div>
+      <div class="pillar-val pillar-val--warn">{{PHOTO_SCORE}}</div>
+    </div>
+    <div class="pillar-row">
+      <div class="pillar-lbl">Pricing</div>
+      <div class="pillar-track"><div class="pillar-fill pillar-fill--low" style="width:{{PRICING_PCT}}%;"></div><div class="pillar-avg"></div></div>
+      <div class="pillar-val pillar-val--low">{{PRICING_SCORE}}</div>
+    </div>
+    <div class="pillar-row">
+      <div class="pillar-lbl">Platforms</div>
+      <div class="pillar-track"><div class="pillar-fill pillar-fill--low" style="width:{{PLATFORM_PCT}}%;"></div><div class="pillar-avg"></div></div>
+      <div class="pillar-val pillar-val--low">{{PLATFORM_SCORE}}</div>
+    </div>
+  </div>
+
+  <!-- Genuine insight — biggest gap -->
+  <div class="insight">
+    <div class="insight-lbl">&#9679; Your biggest opportunity right now</div>
+    <div class="insight-txt">{{MAIN_INSIGHT}}</div>
+    <div class="insight-action">Something you can action today: {{QUICK_WIN}}</div>
+  </div>
+
+  <!-- One free tip -->
+  <div class="free-tip">
+    <div class="free-tip-icon">&#9679;</div>
+    <div class="free-tip-inner">
+      <div class="free-tip-lbl">Free — do this today, no report needed</div>
+      <div class="free-tip-txt">{{FREE_TIP}}</div>
+    </div>
+  </div>
+
+  <!-- Upsell bar -->
+  <div class="cover-upsell" style="margin-top:12px;">
+    <div class="cover-upsell-l">
+      <div class="cover-upsell-lbl">The full report — every fix, ready to paste</div>
+      <div class="cover-upsell-txt">New title · Full copy rewrite · Photo plan · Pricing · Platform strategy</div>
+    </div>
+    <div class="cover-upsell-price">{{CURRENCY}}199</div>
+  </div>
+
+  <div class="cover-footer" style="margin-top:16px;">
+    <div class="cover-footer-l">STR Clinic · strclinic.com<br>Prepared by Brandon</div>
+    <div class="cover-footer-r">{{DATE}}<br>Free Audit</div>
+  </div>
+
+  <div class="page-foot page-foot--dk">
+    <span class="pf-brand pf-brand--dk">STR Clinic · strclinic.com</span>
+    <span class="pf-pg">01</span>
+    <span class="pf-tag pf-tag--dk">Free Audit</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     PAGE 2 — THE PLATFORM OPPORTUNITY
+     Location-aware: UK/EU vs US/CA vs AU/NZ vs Global
+═══════════════════════════════════════════════════ -->
+<div class="page bg-dk">
+  <div class="sec-num sec-num--inv">The Bigger Picture</div>
+  <div class="sec-h sec-h--inv">You're Only Using One Channel</div>
+  <div class="rule"></div>
+
+  <!-- Revenue opportunity banner -->
+  <div class="opp-banner">
+    <div class="opp-banner-lbl">Additional revenue benchmark · Comparable properties in your market</div>
+    <div class="opp-banner-val">{{CURRENCY}}{{PLATFORM_OPP_LOW}}k–{{PLATFORM_OPP_HIGH}}k</div>
+    <div class="opp-banner-desc">What comparable hosts in your area add per year by listing on the right additional platforms with a well-optimised listing. Most leave this on the table because their Airbnb copy isn't strong enough to transfer — or they don't know where to start.</div>
+  </div>
+
+  <!-- Platform cards — location-aware content injected by generator -->
+  <div class="sub sub--inv">The Platforms That Matter for {{MARKET_LABEL}} Hosts</div>
+
+  <!-- Platform 1: Always Airbnb -->
+  <div class="platform-card">
+    <div class="platform-card-head">
+      <div class="platform-name">Airbnb</div>
+      <div class="platform-badge platform-badge--live">You're live</div>
+    </div>
+    <div class="platform-desc">Your current home. High-traffic and competitive — driven by search ranking, photo quality and listing copy. Hosts who optimise properly convert significantly more of the same traffic.</div>
+    <div class="platform-tip-inline">Benchmark: {{CURRENCY}}{{AIRBNB_BENCH_LOW}}k–{{AIRBNB_BENCH_HIGH}}k/yr for comparable {{MARKET_LABEL}} properties</div>
+  </div>
+
+  <!-- Platform 2: Location-aware -->
+  <div class="platform-card">
+    <div class="platform-card-head">
+      <div class="platform-name">{{PLATFORM_2_NAME}}</div>
+      <div class="platform-badge platform-badge--opp">Opportunity</div>
+    </div>
+    <div class="platform-desc">{{PLATFORM_2_DESC}}</div>
+    <div class="platform-tip-inline">{{PLATFORM_2_BENCH}}</div>
+  </div>
+
+  <!-- Platform 3: Location-aware -->
+  <div class="platform-card">
+    <div class="platform-card-head">
+      <div class="platform-name">{{PLATFORM_3_NAME}}</div>
+      <div class="platform-badge platform-badge--opp">Opportunity</div>
+    </div>
+    <div class="platform-desc">{{PLATFORM_3_DESC}}</div>
+    <div class="platform-tip-inline">{{PLATFORM_3_BENCH}}</div>
+  </div>
+
+  <!-- The key truth -->
+  <div class="key-truth">
+    <div class="key-truth-lbl">The one thing most hosts don't realise</div>
+    <div class="key-truth-txt">Multi-platform only works when your listing copy is strong. A weak Airbnb listing fails on every platform you add it to. Fix the foundation first.</div>
+  </div>
+
+  <!-- One actionable thing they can do today on platforms -->
+  <div class="one-thing">
+    <div class="one-thing-lbl">&#9679; Something you can do today — free, takes 10 minutes</div>
+    <div class="one-thing-title">Check your Airbnb title against these three rules</div>
+    <div class="one-thing-body">Your title has 50 characters. It should lead with your single most compelling feature (the view, the hot tub, the location), include a guest-type signal (couples retreat, family hideaway, dog-friendly), and avoid filler words like "lovely", "cosy" or "beautiful" — guests search for specifics, not adjectives. If your title doesn't pass all three, rewriting it is the highest-ROI change you can make for free.</div>
+  </div>
+
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:8px;">In the full report — unlocked at {{CURRENCY}}199</div>
+  <div class="locked-row">
+    <div class="locked-num">01</div>
+    <div class="locked-body">
+      <div class="locked-title">Your new title — written for your property, ready to paste into Airbnb</div>
+      <div class="locked-desc">Researched, written and formatted. Not a suggestion — finished copy you put in as-is.</div>
+    </div>
+  </div>
+  <div class="locked-row">
+    <div class="locked-num">02</div>
+    <div class="locked-body">
+      <div class="locked-title">Platform-specific copy for {{PLATFORM_2_NAME}} and {{PLATFORM_3_NAME}}</div>
+      <div class="locked-desc">Adapted openings and audience-aware framing. Ready to list, not ready to edit.</div>
+    </div>
+  </div>
+  <div class="locked-row">
+    <div class="locked-num">03</div>
+    <div class="locked-body">
+      <div class="locked-title">Seasonal pricing benchmarks for your exact market and property type</div>
+      <div class="locked-desc">Peak, shoulder and low-season rates specific to your location — not national averages.</div>
+    </div>
+  </div>
+
+  <div class="page-foot page-foot--dk">
+    <span class="pf-brand pf-brand--dk">STR Clinic · strclinic.com</span>
+    <span class="pf-pg">02</span>
+    <span class="pf-tag pf-tag--dk">Free Audit</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     PAGE 3 — PERSONAL NOTE + PROCESS + CTA
+═══════════════════════════════════════════════════ -->
+<div class="page bg-lt">
+  <div class="sec-num">From Brandon</div>
+  <div class="sec-h">A Note on Your Listing</div>
+  <div class="rule"></div>
+
+  <!-- Personal note
+       CDR-WRITER TONE GUIDE FOR {{BRANDON_NOTE_LINE_1}}, _2, _3:
+       - Max 20 words per line. Punchy. No "I noticed" or "it seems" — state it directly.
+       - Line 1: One specific observation about this property's listing (the thing that stood out most).
+       - Line 2: What that means in plain terms for their revenue or bookings.
+       - Line 3: The honest pitch — what changes and why the paid report is the right next step.
+       - Tone: expert but warm. Like an experienced host giving a friend honest feedback.
+  -->
+  <div class="brandon-note">
+    <div class="brandon-note-lbl">&#9679; A personal note</div>
+    <div class="brandon-note-body">
+      <p>{{BRANDON_NOTE_LINE_1}}</p>
+      <p>{{BRANDON_NOTE_LINE_2}}</p>
+      <p>{{BRANDON_NOTE_LINE_3}}</p>
+    </div>
+    <div class="brandon-note-sig">
+      <div class="brandon-note-sig-name">Brandon</div>
+      <div class="brandon-note-sig-title">STR Clinic &nbsp;·&nbsp; strclinic.com</div>
+    </div>
+  </div>
+
+  <!-- What you get -->
+  <div class="wyg-block">
+    <div class="wyg-lbl">Everything in the paid report</div>
+    <div class="wyg-grid">
+      <div class="wyg-item">
+        <span class="wyg-check">✓</span>
+        <span class="wyg-txt"><strong>New listing title</strong> — ready to paste</span>
+      </div>
+      <div class="wyg-item">
+        <span class="wyg-check">✓</span>
+        <span class="wyg-txt"><strong>Full description rewrite</strong> — all sections</span>
+      </div>
+      <div class="wyg-item">
+        <span class="wyg-check">✓</span>
+        <span class="wyg-txt"><strong>Photo reorder plan</strong> — exact sequence</span>
+      </div>
+      <div class="wyg-item">
+        <span class="wyg-check">✓</span>
+        <span class="wyg-txt"><strong>Seasonal pricing</strong> — market benchmarked</span>
+      </div>
+      <div class="wyg-item">
+        <span class="wyg-check">✓</span>
+        <span class="wyg-txt"><strong>{{PLATFORM_2_NAME}} copy</strong> — adapted, ready</span>
+      </div>
+      <div class="wyg-item">
+        <span class="wyg-check">✓</span>
+        <span class="wyg-txt"><strong>{{PLATFORM_3_NAME}} copy</strong> — adapted, ready</span>
+      </div>
+      <div class="wyg-item">
+        <span class="wyg-check">✓</span>
+        <span class="wyg-txt"><strong>Implementation roadmap</strong> — prioritised</span>
+      </div>
+      <div class="wyg-item">
+        <span class="wyg-check">✓</span>
+        <span class="wyg-txt"><strong>Delivered in 5 days</strong> — branded PDF</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Process -->
+  <div class="sub">What Happens When You Order</div>
+  <div class="process-steps">
+    <div class="process-step">
+      <div class="process-n">1</div>
+      <div class="process-body">
+        <div class="process-title">Check out securely</div>
+        <div class="process-desc">One payment of {{CURRENCY}}199 via Stripe. You'll receive a link to share your listing URL and any notes about your property.</div>
+        <div class="process-time">&#9679;&nbsp; 2 minutes</div>
+      </div>
+    </div>
+    <div class="process-step">
+      <div class="process-n">2</div>
+      <div class="process-body">
+        <div class="process-title">We research your listing and market</div>
+        <div class="process-desc">Your listing, your photos, your local competition. What's working, what's costing you bookings, and what the market around you is doing.</div>
+        <div class="process-time">&#9679;&nbsp; Within 48 hours of receiving your details</div>
+      </div>
+    </div>
+    <div class="process-step">
+      <div class="process-n">3</div>
+      <div class="process-body">
+        <div class="process-title">Your report is written and reviewed</div>
+        <div class="process-desc">Every section written specifically for your property. The copy, the pricing, the photo plan, the platform strategy — checked before it leaves us.</div>
+        <div class="process-time">&#9679;&nbsp; Personal. Not automated.</div>
+      </div>
+    </div>
+    <div class="process-step">
+      <div class="process-n">4</div>
+      <div class="process-body">
+        <div class="process-title">Your PDF arrives by email</div>
+        <div class="process-desc">Open it, follow the implementation roadmap, apply the changes. Most hosts are done in 2–3 hours.</div>
+        <div class="process-time">&#9679;&nbsp; Delivered within 5 business days</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-block">
+    <div class="cta-lbl">One report. One payment. Your listing fixed.</div>
+    <div class="cta-price">{{CURRENCY}}199</div>
+    <div class="cta-price-sub">One-off &nbsp;·&nbsp; No subscription &nbsp;·&nbsp; Yours to keep</div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.12em;margin-bottom:16px;position:relative;z-index:1;">Personally reviewed by Brandon before it leaves us</div>
+    <a class="cta-btn" href="{{STRIPE_URL}}">Order Your Full Report</a>
+    <div class="cta-url">strclinic.com &nbsp;·&nbsp; Secure checkout via Stripe</div>
+    <div class="cta-note">Questions before you order? Email brandon@strclinic.com — happy to talk through your listing first.</div>
+  </div>
+
+  <div class="page-foot page-foot--lt">
+    <span class="pf-brand pf-brand--lt">STR Clinic · strclinic.com</span>
+    <span class="pf-pg">03</span>
+    <span class="pf-tag pf-tag--lt">Free Audit</span>
+  </div>
+</div>
+
+
+</body>
+</html>
