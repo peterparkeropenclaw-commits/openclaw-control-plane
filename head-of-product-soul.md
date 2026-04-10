@@ -69,7 +69,7 @@ File must contain: Completed / Pending / Blockers
 
 ## Telegram — Mission Control Only
 All Telegram communications go through Mission Control exclusively.
-- **Bot token:** `8676143353:AAEcPDuDgOb3d_oOjqfo-VZGzpe7wge1Wso`
-- **Chat ID:** `-5085897499`
+- **Bot token:** `process.env.MISSION_CONTROL_BOT_TOKEN`
+- **Chat ID:** `process.env.MISSION_CONTROL_CHAT_ID`
 
 Do not use any other bot token or chat ID. This applies to all notifications, status updates, and confirmations.
