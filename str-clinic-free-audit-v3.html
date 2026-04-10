@@ -21,11 +21,11 @@
 body{font-family:'Inter',sans-serif;font-size:14px;color:var(--text);background:#fff;line-height:1.65;}
 p{margin-bottom:12px;font-size:14px;line-height:1.65;}
 p:last-child{margin-bottom:0;}
-.page{break-after:page;page-break-after:always;position:relative;min-height:297mm;}
+.page{break-after:page;page-break-after:always;min-height:297mm;display:flex;flex-direction:column;}
 .page:last-of-type{break-after:auto;page-break-after:auto;}
 @media print{
   body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .page{break-after:page;page-break-after:always;min-height:297mm;}
+  .page{break-after:page;page-break-after:always;min-height:297mm;display:flex;flex-direction:column;}
   .page:last-of-type{break-after:auto;page-break-after:auto;}
   @page{margin:0;size:A4;}
 }
@@ -35,7 +35,7 @@ p:last-child{margin-bottom:0;}
 .mono{font-family:'IBM Plex Mono',monospace;}
 
 /* ── FOOTER ── */
-.page-foot{position:absolute;bottom:0;left:0;right:0;height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 64px;}
+.page-foot{margin-top:auto;height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 64px;}
 .page-foot--dk{border-top:1px solid rgba(232,200,64,0.12);}
 .page-foot--lt{border-top:1px solid rgba(26,26,46,0.1);}
 .pf-brand{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:0.22em;text-transform:uppercase;}
@@ -361,7 +361,7 @@ p:last-child{margin-bottom:0;}
   <div class="one-thing">
     <div class="one-thing-lbl">&#9679; Something you can do today — free, takes 10 minutes</div>
     <div class="one-thing-title">Check your Airbnb title against these three rules</div>
-    <div class="one-thing-body">Your title has 50 characters. It should lead with your single most compelling feature (the view, the hot tub, the location), include a guest-type signal (couples retreat, family hideaway, dog-friendly), and avoid filler words like "lovely", "cosy" or "beautiful" — guests search for specifics, not adjectives. If your title doesn't pass all three, rewriting it is the highest-ROI change you can make for free.</div>
+    <div class="one-thing-body">Lead with your best feature (the view, the hot tub, the location). Add a guest-type signal (couples retreat, dog-friendly). Cut filler words — guests search for specifics. If your title fails any of these, rewriting it is the single highest-ROI change you can make today.</div>
   </div>
 
   <div class="page-foot page-foot--dk">
