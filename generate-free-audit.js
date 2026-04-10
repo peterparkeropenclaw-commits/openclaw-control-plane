@@ -325,6 +325,11 @@ async function main() {
     // Use CDR-WRITER scores if returned, otherwise fall back to data fields or zero
     const scoreField = (key, cdrKey) => aiFields[cdrKey ?? key] ?? data[key] ?? (data.scores && data.scores[key]) ?? 0;
 
+    // Convert a raw score to a bar-width percentage.
+    // Scores from CDR-WRITER are on a 0–10 scale; template uses width:N%.
+    // Multiply by 10 when ≤ 10 so a score of 7.5 → 75% bar width, not 7.5%.
+    const toBarPct = (v) => { const n = Number(v) || 0; return n > 10 ? Math.round(n) : Math.round(n * 10); };
+
     vars = {
       PROPERTY_NAME:       data.property_name || '',
       LOCATION:            data.location || '',
@@ -338,11 +343,11 @@ async function main() {
       PHOTO_SCORE:         scoreField('photo_score'),
       PRICING_SCORE:       scoreField('pricing_score'),
       PLATFORM_SCORE:      scoreField('platform_score'),
-      TITLE_PCT:           scoreField('title_score'),
-      DESC_PCT:            scoreField('desc_score'),
-      PHOTO_PCT:           scoreField('photo_score'),
-      PRICING_PCT:         scoreField('pricing_score'),
-      PLATFORM_PCT:        scoreField('platform_score'),
+      TITLE_PCT:           toBarPct(scoreField('title_score')),
+      DESC_PCT:            toBarPct(scoreField('desc_score')),
+      PHOTO_PCT:           toBarPct(scoreField('photo_score')),
+      PRICING_PCT:         toBarPct(scoreField('pricing_score')),
+      PLATFORM_PCT:        toBarPct(scoreField('platform_score')),
       PLATFORM_OPP_LOW:    market.platformOppLow,
       PLATFORM_OPP_HIGH:   market.platformOppHigh,
       AIRBNB_BENCH_LOW:    market.airbnbBenchLow,
