@@ -55,7 +55,7 @@ const PLATFORM_INFO = {
 
 // Scrape property name and location from an Airbnb listing page.
 // Returns { propertyName, location } — either may be null if not found.
-async function scrapeListingBasics(listingUrl) {
+async function scrapeListingContent(listingUrl) {
   return new Promise((resolve) => {
     const protocol = listingUrl.startsWith('https') ? https : http;
     const req = protocol.get(listingUrl, {
@@ -69,29 +69,85 @@ async function scrapeListingBasics(listingUrl) {
       res.on('data', chunk => chunks.push(chunk));
       res.on('end', () => {
         const html = Buffer.concat(chunks).toString('utf8');
+
+        // Property name — prefer listingTitle, fall back to og:title
+        const listingTitle = (html.match(/"listingTitle":"([^"]+)"/) || [])[1] || null;
         const ogTitle = (html.match(/property="og:title"\s+content="([^"]+)"/) || html.match(/content="([^"]+)"\s+property="og:title"/) || [])[1] || '';
-        const propertyName = (html.match(/"name":"([^"]+)"/)||[])[1]?.split('·')[0]?.trim()
+        const propertyName = listingTitle
           || ogTitle.replace(/·.*$/, '').replace(/Entire.*?in /i, '').trim()
           || null;
+
+        // Location
+        const localizedLocation = (html.match(/"localizedLocation":"([^"]+)"/) || [])[1] || null;
         const locMatch = html.match(/"addressLocality"\s*:\s*"([^"]+)"/) || html.match(/"city"\s*:\s*"([^"]+)"/);
-        const location = locMatch ? locMatch[1] : null;
         const regionMatch = html.match(/"addressRegion"\s*:\s*"([^"]+)"/);
-        const region = regionMatch ? regionMatch[1] : null;
-        const fullLocation = [location, region].filter(Boolean).join(', ') || null;
-        resolve({ propertyName: propertyName || null, location: fullLocation || null });
+        const location = localizedLocation
+          || [locMatch?.[1], regionMatch?.[1]].filter(Boolean).join(', ')
+          || null;
+
+        // Description
+        const descMatch = html.match(/"description":"((?:[^"\\]|\\.){30,1500}?)"/);
+        let description = null;
+        try { description = descMatch ? JSON.parse('"' + descMatch[1] + '"') : null; } catch (_) { description = descMatch?.[1] || null; }
+
+        // Photo count — unique hosting image URLs
+        const photoUrls = new Set(html.match(/https:\/\/a0\.muscache\.com\/im\/pictures\/hosting\/[^\s"?]+/g) || []);
+        const photoCount = photoUrls.size;
+
+        // Amenities
+        const amenBlock = html.match(/"amenities":\[([\s\S]{10,4000}?)\]/);
+        let amenitiesAvailable = [];
+        let amenitiesUnavailable = [];
+        if (amenBlock) {
+          const titles = [...amenBlock[1].matchAll(/"title":"([^"]+)"/g)].map(m => m[1]);
+          const avail  = [...amenBlock[1].matchAll(/"available":(true|false)/g)].map(m => m[1]);
+          amenitiesAvailable   = titles.filter((_, i) => avail[i] !== 'false');
+          amenitiesUnavailable = titles.filter((_, i) => avail[i] === 'false');
+        }
+
+        // Rating and review count
+        const rating     = (html.match(/"reviewsScore":([0-9.]+)/) || html.match(/"starRating":([0-9.]+)/) || html.match(/"guestSatisfactionOverall":([0-9.]+)/) || [])[1] || null;
+        const reviewText = html.match(/(\d+)\s+reviews?/i);
+        const reviewCount = reviewText ? parseInt(reviewText[1], 10) : null;
+
+        // Room type / property type
+        const roomType = (html.match(/"roomType":"([^"]+)"/) || [])[1] || null;
+
+        // Bedrooms / beds / bathrooms from og:title pattern e.g. "★5.0 · 1 bedroom · 1 bed · 1 bathroom"
+        const bedsInfo = ogTitle.match(/(\d+)\s+bed(?:room)?s?.*?(\d+)\s+bath/i);
+
+        resolve({
+          propertyName,
+          location,
+          description,
+          photoCount,
+          amenitiesAvailable,
+          amenitiesUnavailable,
+          rating:      rating ? parseFloat(rating) : null,
+          reviewCount,
+          roomType,
+          ogTitle,
+        });
       });
     });
-    req.on('error', () => resolve({ propertyName: null, location: null }));
-    req.setTimeout(15000, () => { req.destroy(); resolve({ propertyName: null, location: null }); });
+    req.on('error', () => resolve({ propertyName: null, location: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], rating: null, reviewCount: null, roomType: null, ogTitle: '' }));
+    req.setTimeout(20000, () => { req.destroy(); resolve({ propertyName: null, location: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], rating: null, reviewCount: null, roomType: null, ogTitle: '' }); });
   });
 }
 
-async function generateAIFields(data, market) {
+async function generateAIFields(data, market, scraped) {
+  const propertyName = data.property_name || scraped?.propertyName || 'this listing';
   const fallback = {
-    MAIN_INSIGHT:        `Your listing score of ${data.overall_score}/100 points to specific gaps directly impacting your search ranking and conversion rate.`,
+    title_score:         5,
+    desc_score:          5,
+    photo_score:         5,
+    pricing_score:       5,
+    platform_score:      5,
+    overall_score:       50,
+    MAIN_INSIGHT:        `${propertyName} has specific gaps in its listing that are directly impacting search visibility and conversion rate.`,
     QUICK_WIN:           `Rewrite your title to lead with your single best feature — the one thing a guest would pay more for. Paste it in today.`,
     FREE_TIP:            `Add your check-in and check-out times to your listing description. It reduces pre-booking messages and signals a professional host.`,
-    BRANDON_NOTE_LINE_1: `${data.property_name} has real differentiators that your current listing doesn't surface clearly.`,
+    BRANDON_NOTE_LINE_1: `${propertyName} has real differentiators that your current listing doesn't surface clearly.`,
     BRANDON_NOTE_LINE_2: `Guests who would choose you aren't seeing what makes you different — that's a direct revenue gap.`,
     BRANDON_NOTE_LINE_3: `The full report gives you the exact copy, sequence, and pricing to close it — ready to paste in.`,
   };
@@ -101,25 +157,55 @@ async function generateAIFields(data, market) {
     || path.join(process.env.HOME || '/tmp', '.openclaw', 'workspace', 'memory');
   const resultPath = path.join(workspaceMemory, `CDR-AI-RESULT-${taskId}.json`);
   const authToken = process.env.TRIGGER_AUTH_TOKEN || '';
-  const s = (key, fallbackVal = 0) => data[key] || (data.scores && data.scores[key]) || fallbackVal;
 
-  const brief = `Generate AI content fields for an STR Clinic audit report.
+  // Build rich context from scraped content
+  const amenList = scraped?.amenitiesAvailable?.length
+    ? scraped.amenitiesAvailable.join(', ')
+    : 'not extracted';
+  const amenMissing = scraped?.amenitiesUnavailable?.length
+    ? scraped.amenitiesUnavailable.join(', ')
+    : 'none noted';
 
-Property: ${data.property_name || 'Unknown'}
-Location: ${data.location || 'Unknown'}
-Score: ${data.overall_score || 0}/100
-Title score: ${s('title_score')}/10, Photo: ${s('photo_score')}/10, Description: ${s('desc_score')}/10, Pricing: ${s('pricing_score')}/10, Platform: ${s('platform_score')}/10
+  const brief = `You are CDR-WRITER for STR Clinic. Analyse this Airbnb listing and return scored output as JSON.
 
-Generate the following fields. STR Clinic tone: direct, expert, no fluff. UK Airbnb hosts. Brandon's voice.
+## Listing Data
+Property name: ${propertyName}
+Location: ${data.location || scraped?.location || 'Unknown'}
+Listing title: ${scraped?.ogTitle || propertyName}
+Room type: ${scraped?.roomType || 'Unknown'}
+Description: ${scraped?.description || '(not available)'}
+Photo count: ${scraped?.photoCount ?? 'unknown'}
+Amenities available (${scraped?.amenitiesAvailable?.length ?? 0}): ${amenList}
+Amenities unavailable/missing: ${amenMissing}
+Guest rating: ${scraped?.rating ?? 'unknown'} | Review count: ${scraped?.reviewCount ?? 'unknown'}
 
-Return ONLY JSON, no other text:
+## Scoring Instructions
+Score each dimension 0–10 based on what you can infer from the listing data above.
+Use STR Clinic scoring criteria:
+- title_score: Does the title lead with a specific compelling feature? Is it keyword-rich, differentiated, and benefit-led? Penalise generic or vague titles.
+- desc_score: Is the description detailed, sensory, and specific? Does it answer guest objections pre-emptively? Penalise short or cliché copy.
+- photo_score: Is the photo count strong? (10+ good, 20+ excellent, <10 poor). Infer from count only — you cannot see the photos.
+- pricing_score: Infer from rating/review volume. High reviews + high rating = likely well-priced. Unknown = score 5.
+- platform_score: Infer from platform presence signals. Airbnb-only listing with no cross-platform signals = lower score.
+- overall_score: Weighted average (title 25%, description 25%, photos 20%, pricing 15%, platform 15%). Round to nearest integer.
+
+## Output Instructions
+Tone: STR Clinic — direct, expert, no fluff. Written for UK short-term rental hosts. Brandon's voice: experienced host, host-to-host, practical.
+BRANDON_NOTE lines must feel personal and specific to THIS listing — reference actual property name, location, or a specific detail from the description or amenities.
+Return ONLY valid JSON, no commentary, no markdown:
 {
-  "MAIN_INSIGHT": "2-3 sentences — most important thing this host needs to know",
-  "QUICK_WIN": "1-2 sentences — fastest highest-impact change today",
-  "FREE_TIP": "1-2 sentences — useful tactical tip",
-  "BRANDON_NOTE_LINE_1": "First line — warm, direct, host-to-host (max 20 words)",
-  "BRANDON_NOTE_LINE_2": "Second line — specific observation from scores (max 20 words)",
-  "BRANDON_NOTE_LINE_3": "Third line — encouraging close with clear next step (max 20 words)"
+  "title_score": <0-10>,
+  "desc_score": <0-10>,
+  "photo_score": <0-10>,
+  "pricing_score": <0-10>,
+  "platform_score": <0-10>,
+  "overall_score": <0-100>,
+  "MAIN_INSIGHT": "2-3 sentences — the single most important thing this host needs to know, specific to their listing",
+  "QUICK_WIN": "1-2 sentences — the fastest highest-impact change they can make today, specific to their listing",
+  "FREE_TIP": "1-2 sentences — a useful tactical tip not covered elsewhere",
+  "BRANDON_NOTE_LINE_1": "Warm, direct, host-to-host — reference a specific detail about this property (max 20 words)",
+  "BRANDON_NOTE_LINE_2": "Specific observation tied to their scores or listing content (max 20 words)",
+  "BRANDON_NOTE_LINE_3": "Encouraging close with a clear next step (max 20 words)"
 }
 
 Write result to: ${resultPath}`;
@@ -173,6 +259,12 @@ Write result to: ${resultPath}`;
       const fields = raw.fields || raw;
       console.log('CDR AI fields received.');
       return {
+        title_score:         typeof fields.title_score    === 'number' ? fields.title_score    : fallback.title_score,
+        desc_score:          typeof fields.desc_score     === 'number' ? fields.desc_score     : fallback.desc_score,
+        photo_score:         typeof fields.photo_score    === 'number' ? fields.photo_score    : fallback.photo_score,
+        pricing_score:       typeof fields.pricing_score  === 'number' ? fields.pricing_score  : fallback.pricing_score,
+        platform_score:      typeof fields.platform_score === 'number' ? fields.platform_score : fallback.platform_score,
+        overall_score:       typeof fields.overall_score  === 'number' ? fields.overall_score  : fallback.overall_score,
         MAIN_INSIGHT:        fields.MAIN_INSIGHT        || fallback.MAIN_INSIGHT,
         QUICK_WIN:           fields.QUICK_WIN           || fallback.QUICK_WIN,
         FREE_TIP:            fields.FREE_TIP            || fallback.FREE_TIP,
@@ -208,29 +300,30 @@ async function main() {
     if (!vars.DATE) vars.DATE = new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'});
     console.log('Direct mode — using vars from JSON, skipping market detection and AI calls');
   } else {
-    // Scrape property name and location if not provided or left blank by caller
-    const isGenericName = !data.property_name || /^(your\s+property|)$/i.test(data.property_name.trim());
-    const isGenericLocation = !data.location || /^(uk|unknown|unknown location|)$/i.test(data.location.trim());
-    if (data.listing_url && (isGenericName || isGenericLocation)) {
-      console.log('Scraping listing basics from Airbnb...');
-      const scraped = await scrapeListingBasics(data.listing_url);
-      if (isGenericName && scraped.propertyName) {
-        data.property_name = scraped.propertyName;
-        console.log(`  Property name: ${data.property_name}`);
-      }
-      if (isGenericLocation && scraped.location) {
-        data.location = scraped.location;
-        console.log(`  Location: ${data.location}`);
-      }
+    // Scrape full listing content from Airbnb
+    const shouldScrape = data.listing_url && (
+      !data.property_name || /^(your\s+property|)$/i.test(data.property_name.trim()) ||
+      !data.location      || /^(uk|unknown|unknown location|)$/i.test(data.location.trim()) ||
+      !data.title_score   // always scrape if scores not pre-filled
+    );
+    let scraped = { propertyName: null, location: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], rating: null, reviewCount: null, roomType: null, ogTitle: '' };
+    if (shouldScrape) {
+      console.log('Scraping full listing content from Airbnb...');
+      scraped = await scrapeListingContent(data.listing_url);
+      if (scraped.propertyName) { data.property_name = scraped.propertyName; console.log(`  Property: ${data.property_name}`); }
+      if (scraped.location)     { data.location = scraped.location; console.log(`  Location: ${data.location}`); }
+      console.log(`  Photos: ${scraped.photoCount} | Amenities: ${scraped.amenitiesAvailable.length} | Rating: ${scraped.rating} (${scraped.reviewCount} reviews)`);
     }
 
     const market = detectMarket(data);
     const sym = market.sym;
-    const aiFields = await generateAIFields(data, market);
+    const aiFields = await generateAIFields(data, market, scraped);
     const p2 = PLATFORM_INFO[market.p2] || { desc:'', bench:()=>'' };
     const p3 = PLATFORM_INFO[market.p3] || { desc:'', bench:()=>'' };
     const stripeUrl = market.code === 'GBP' ? STRIPE_GBP : STRIPE_USD;
-    const s = (key, fallback=0) => data[key] || (data.scores && data.scores[key]) || fallback;
+
+    // Use CDR-WRITER scores if returned, otherwise fall back to data fields or zero
+    const scoreField = (key, cdrKey) => aiFields[cdrKey ?? key] ?? data[key] ?? (data.scores && data.scores[key]) ?? 0;
 
     vars = {
       PROPERTY_NAME:       data.property_name || '',
@@ -239,17 +332,17 @@ async function main() {
       STRIPE_URL:          stripeUrl,
       CURRENCY:            sym,
       MARKET_LABEL:        market.marketLabel,
-      SCORE:               data.overall_score || 0,
-      TITLE_SCORE:         s('title_score'),
-      DESC_SCORE:          s('desc_score'),
-      PHOTO_SCORE:         s('photo_score'),
-      PRICING_SCORE:       s('pricing_score'),
-      PLATFORM_SCORE:      s('platform_score'),
-      TITLE_PCT:           s('title_score'),
-      DESC_PCT:            s('desc_score'),
-      PHOTO_PCT:           s('photo_score'),
-      PRICING_PCT:         s('pricing_score'),
-      PLATFORM_PCT:        s('platform_score'),
+      SCORE:               aiFields.overall_score || data.overall_score || 0,
+      TITLE_SCORE:         scoreField('title_score'),
+      DESC_SCORE:          scoreField('desc_score'),
+      PHOTO_SCORE:         scoreField('photo_score'),
+      PRICING_SCORE:       scoreField('pricing_score'),
+      PLATFORM_SCORE:      scoreField('platform_score'),
+      TITLE_PCT:           scoreField('title_score'),
+      DESC_PCT:            scoreField('desc_score'),
+      PHOTO_PCT:           scoreField('photo_score'),
+      PRICING_PCT:         scoreField('pricing_score'),
+      PLATFORM_PCT:        scoreField('platform_score'),
       PLATFORM_OPP_LOW:    market.platformOppLow,
       PLATFORM_OPP_HIGH:   market.platformOppHigh,
       AIRBNB_BENCH_LOW:    market.airbnbBenchLow,
