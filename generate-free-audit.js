@@ -351,6 +351,17 @@ Write ALL text fields (MAIN_INSIGHT, QUICK_WIN, FREE_TIP, BRANDON_NOTE lines) in
 - Persona C: Focus on distribution, visibility, or pricing as the likely lever. NOT a content criticism — the listing has good bones.
 - Persona D: Be direct and specific. Name what's weak and why it costs them. The full report is the clear next step.
 
+## Occupancy Rules — MANDATORY
+Calendar occupancy (next 90 days) is a primary diagnostic signal. You MUST reference it explicitly in your copy — never leave it unmentioned if the data is present.
+
+Apply these rules based on the occupancy figure provided above:
+- Occupancy < 50%: This is the LEAD finding. Name the number directly in MAIN_INSIGHT. Example: "Your calendar is X% booked over the next 90 days — that's the gap we need to close."
+- Occupancy 50–70%: Mid-tier finding. Reference the exact percentage in context of the revenue gap. Frame as "you're part-way there but leaving significant income on the table."
+- Occupancy > 70%: Positive signal. Acknowledge it explicitly, then pivot to rate optimisation. "At X% occupancy you're clearly converting — the opportunity now is in rate, not volume."
+- Occupancy is null / unknown: Do NOT invent a number. Reference review velocity (review count + rating) as a proxy signal instead, and note that calendar data was unavailable for this audit.
+
+This rule applies regardless of persona. The number must appear in at least one of: MAIN_INSIGHT, QUICK_WIN, or BRANDON_NOTE lines.
+
 ## Language Rules
 CRITICAL: Never refer to the listing as the host's "home", "house", or imply it is their primary residence. The property may be an investment, a second property, or a dedicated STR. Use instead: "your property", "your listing", "the space", or the specific property name (e.g. "${propertyName}") where known.
 - "your home" → "your property" or "this listing"
