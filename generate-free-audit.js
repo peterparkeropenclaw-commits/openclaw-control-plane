@@ -234,7 +234,7 @@ async function generateAIFields(data, market, scraped, persona) {
     },
     B: {
       MAIN_INSIGHT:        `${propertyName} is performing well — strong reviews, solid occupancy, and a well-structured listing. The opportunity now is expansion, not repair.`,
-      QUICK_WIN:           `Duplicate your Airbnb listing copy to Vrbo or Booking.com. Your listing is strong enough to convert on a second platform with minimal adaptation.`,
+      QUICK_WIN:           `List your property on a second platform — your listing is strong enough to convert with minimal adaptation. CDR-WRITER will recommend the right one for your property type.`,
       FREE_TIP:            `A/B test two cover photos by switching them monthly. Your current photos are working — a stronger hero shot could push your conversion rate higher.`,
       BRANDON_NOTE_LINE_1: `${propertyName} is doing what most listings don't — the reviews and occupancy back that up.`,
       BRANDON_NOTE_LINE_2: `The gap for you isn't the listing itself — it's the channels you're not yet on.`,
@@ -306,6 +306,19 @@ async function generateAIFields(data, market, scraped, persona) {
     D: 'cta_strength: return "hard"',
   };
 
+  // Infer property type for dynamic platform recommendations
+  const titleAndDesc = `${scraped?.ogTitle || propertyName} ${scraped?.description || ''}`.toLowerCase();
+  const uniqueRuralKeywords = ['shepherd', 'treehouse', 'tree house', 'cabin', 'yurt', 'glamping', 'glamp', 'cottage', 'barn', 'hut', 'lodge', 'pod', 'tipi', 'wigwam', 'boathouse', 'windmill', 'farmhouse', 'bothy', 'bell tent', 'geodome', 'dome', 'roundhouse', 'canopy', 'rural', 'woodland', 'countryside', 'forest', 'lakeside', 'riverside', 'coastal cottage'];
+  const cityKeywords = ['apartment', 'flat', 'studio', 'city centre', 'city center', 'central london', 'central manchester', 'central edinburgh', 'central bristol', 'penthouse', 'loft', 'serviced apartment'];
+  const isUniqueRural = uniqueRuralKeywords.some(k => titleAndDesc.includes(k));
+  const isCity = !isUniqueRural && cityKeywords.some(k => titleAndDesc.includes(k));
+  const propertyTypeLabel = isUniqueRural ? 'unique/rural stay' : isCity ? 'city/urban apartment' : 'standard holiday let';
+  const platformRecommendations = isUniqueRural
+    ? `This is a unique/rural property. Platform recommendations:\n- Airbnb: primary platform (already listed)\n- Vrbo: strong fit — families and longer stays, mention first among additional platforms\n- Booking.com: valid secondary platform\n- Also relevant for this property type: Coolstays, Canopy & Stars, Hipcamp UK\n- Do NOT recommend corporate or city-focused platforms`
+    : isCity
+    ? `This is a city/urban property. Platform recommendations:\n- Airbnb: primary platform (already listed)\n- Booking.com: strong fit for urban properties — international reach, shoulder season fill, mention first\n- Vrbo: weaker fit for urban apartments — deprioritise or omit\n- If workspace amenities detected, mention corporate travel platforms`
+    : `This appears to be a standard holiday let. Platform recommendations:\n- Airbnb: primary platform (already listed)\n- Vrbo: good secondary option — families, longer stays\n- Booking.com: strong international reach, fills gaps\n- If property type is unclear from the data, use these generic recommendations but note uncertainty`;
+
   const brief = `You are CDR-WRITER for STR Clinic. Analyse this Airbnb listing and return scored output as JSON.
 
 ## Listing Data
@@ -322,6 +335,11 @@ Nightly rate: ${scraped?.nightlyRate ? `${market.sym}${scraped.nightlyRate}` : '
 Is Superhost: ${scraped?.isSuperhost ?? 'unknown'}
 Is Guest Favourite: ${scraped?.isGuestFavourite ?? 'unknown'}
 Calendar occupancy (next 90 days): ${scraped?.calendarOccupancy != null ? `${scraped.calendarOccupancy}%` : 'unknown'}
+Detected property type: ${propertyTypeLabel}
+
+## Platform Recommendations
+${platformRecommendations}
+Use these recommendations when writing MAIN_INSIGHT, QUICK_WIN, or FREE_TIP if platform distribution is relevant to the persona angle.
 
 ## Persona Classification
 This listing has been pre-classified as: PERSONA ${persona}
@@ -332,6 +350,12 @@ Write ALL text fields (MAIN_INSIGHT, QUICK_WIN, FREE_TIP, BRANDON_NOTE lines) in
 - Persona B: Lead with genuine praise. Be specific. Soft sell only — mention what the full report adds (platform copy, multi-channel), but don't push hard.
 - Persona C: Focus on distribution, visibility, or pricing as the likely lever. NOT a content criticism — the listing has good bones.
 - Persona D: Be direct and specific. Name what's weak and why it costs them. The full report is the clear next step.
+
+## Language Rules
+CRITICAL: Never refer to the listing as the host's "home", "house", or imply it is their primary residence. The property may be an investment, a second property, or a dedicated STR. Use instead: "your property", "your listing", "the space", or the specific property name (e.g. "${propertyName}") where known.
+- "your home" → "your property" or "this listing"
+- "your house" → "your property"
+- Any language implying the host lives there → rephrase using the property name or "the space"
 
 ## Scoring Instructions
 Score each dimension 0–10 based on what you can infer from the listing data above.
