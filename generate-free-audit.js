@@ -10,6 +10,7 @@ const getArg = (flag) => { const i = args.indexOf(flag); return i !== -1 ? args[
 const inputFile = getArg('--input');
 const outputArg = getArg('--output');
 const htmlMode = args.includes('--html');
+const directMode = args.includes('--direct'); // pass all 33 vars directly in JSON, skip detection/AI
 
 if (!inputFile) {
   console.error('Usage: node generate-free-audit.js --input data.json [--output file] [--html]');
@@ -78,50 +79,61 @@ function populate(template, vars) {
 }
 
 async function main() {
-  const market = detectMarket(data);
-  const sym = market.sym;
-  const aiFields = await generateAIFields(data, market);
-  const p2 = PLATFORM_INFO[market.p2] || { desc:'', bench:()=>'' };
-  const p3 = PLATFORM_INFO[market.p3] || { desc:'', bench:()=>'' };
-  const stripeUrl = market.code === 'GBP' ? STRIPE_GBP : STRIPE_USD;
+  let vars;
 
-  const s = (key, fallback=0) => data[key] || (data.scores && data.scores[key]) || fallback;
+  if (directMode) {
+    // --direct: input JSON contains all 33 vars ready to use
+    vars = { ...data };
+    // Ensure DATE has a fallback
+    if (!vars.DATE) vars.DATE = new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+    console.log('Direct mode — using vars from JSON, skipping market detection and AI calls');
+  } else {
+    const market = detectMarket(data);
+    const sym = market.sym;
+    const aiFields = await generateAIFields(data, market);
+    const p2 = PLATFORM_INFO[market.p2] || { desc:'', bench:()=>'' };
+    const p3 = PLATFORM_INFO[market.p3] || { desc:'', bench:()=>'' };
+    const stripeUrl = market.code === 'GBP' ? STRIPE_GBP : STRIPE_USD;
+    const s = (key, fallback=0) => data[key] || (data.scores && data.scores[key]) || fallback;
 
-  const vars = {
-    PROPERTY_NAME:       data.property_name || '',
-    LOCATION:            data.location || '',
-    DATE:                data.date || new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'}),
-    STRIPE_URL:          stripeUrl,
-    CURRENCY:            sym,
-    MARKET_LABEL:        market.marketLabel,
-    SCORE:               data.overall_score || 0,
-    TITLE_SCORE:         s('title_score'),
-    DESC_SCORE:          s('desc_score'),
-    PHOTO_SCORE:         s('photo_score'),
-    PRICING_SCORE:       s('pricing_score'),
-    PLATFORM_SCORE:      s('platform_score'),
-    TITLE_PCT:           s('title_score'),
-    DESC_PCT:            s('desc_score'),
-    PHOTO_PCT:           s('photo_score'),
-    PRICING_PCT:         s('pricing_score'),
-    PLATFORM_PCT:        s('platform_score'),
-    PLATFORM_OPP_LOW:    market.platformOppLow,
-    PLATFORM_OPP_HIGH:   market.platformOppHigh,
-    AIRBNB_BENCH_LOW:    market.airbnbBenchLow,
-    AIRBNB_BENCH_HIGH:   market.airbnbBenchHigh,
-    PLATFORM_2_NAME:     market.p2,
-    PLATFORM_2_DESC:     p2.desc,
-    PLATFORM_2_BENCH:    p2.bench(sym),
-    PLATFORM_3_NAME:     market.p3,
-    PLATFORM_3_DESC:     p3.desc,
-    PLATFORM_3_BENCH:    p3.bench(sym),
-    MAIN_INSIGHT:        aiFields.MAIN_INSIGHT,
-    QUICK_WIN:           aiFields.QUICK_WIN,
-    FREE_TIP:            aiFields.FREE_TIP,
-    BRANDON_NOTE_LINE_1: aiFields.BRANDON_NOTE_LINE_1,
-    BRANDON_NOTE_LINE_2: aiFields.BRANDON_NOTE_LINE_2,
-    BRANDON_NOTE_LINE_3: aiFields.BRANDON_NOTE_LINE_3,
-  };
+    vars = {
+      PROPERTY_NAME:       data.property_name || '',
+      LOCATION:            data.location || '',
+      DATE:                data.date || new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'}),
+      STRIPE_URL:          stripeUrl,
+      CURRENCY:            sym,
+      MARKET_LABEL:        market.marketLabel,
+      SCORE:               data.overall_score || 0,
+      TITLE_SCORE:         s('title_score'),
+      DESC_SCORE:          s('desc_score'),
+      PHOTO_SCORE:         s('photo_score'),
+      PRICING_SCORE:       s('pricing_score'),
+      PLATFORM_SCORE:      s('platform_score'),
+      TITLE_PCT:           s('title_score'),
+      DESC_PCT:            s('desc_score'),
+      PHOTO_PCT:           s('photo_score'),
+      PRICING_PCT:         s('pricing_score'),
+      PLATFORM_PCT:        s('platform_score'),
+      PLATFORM_OPP_LOW:    market.platformOppLow,
+      PLATFORM_OPP_HIGH:   market.platformOppHigh,
+      AIRBNB_BENCH_LOW:    market.airbnbBenchLow,
+      AIRBNB_BENCH_HIGH:   market.airbnbBenchHigh,
+      PLATFORM_2_NAME:     market.p2,
+      PLATFORM_2_DESC:     p2.desc,
+      PLATFORM_2_BENCH:    p2.bench(sym),
+      PLATFORM_3_NAME:     market.p3,
+      PLATFORM_3_DESC:     p3.desc,
+      PLATFORM_3_BENCH:    p3.bench(sym),
+      MAIN_INSIGHT:        aiFields.MAIN_INSIGHT,
+      QUICK_WIN:           aiFields.QUICK_WIN,
+      FREE_TIP:            aiFields.FREE_TIP,
+      BRANDON_NOTE_LINE_1: aiFields.BRANDON_NOTE_LINE_1,
+      BRANDON_NOTE_LINE_2: aiFields.BRANDON_NOTE_LINE_2,
+      BRANDON_NOTE_LINE_3: aiFields.BRANDON_NOTE_LINE_3,
+    };
+  }
+
+  // (end of if/else vars block)
 
   const templatePath = path.join(__dirname, 'str-clinic-free-audit-v3.html');
   const html = populate(fs.readFileSync(templatePath, 'utf8'), vars);
@@ -129,7 +141,7 @@ async function main() {
   const remaining = (html.match(/\{\{[A-Z0-9_]+\}\}/g) || []);
   if (remaining.length > 0) console.warn('WARNING: unpopulated vars:', [...new Set(remaining)].join(', '));
 
-  const safeName = (data.property_name||'audit').replace(/[^a-z0-9]/gi,'-').toLowerCase();
+  const safeName = (vars.PROPERTY_NAME || data.property_name || 'audit').replace(/[^a-z0-9]/gi,'-').toLowerCase();
   const outputFile = outputArg || `${safeName}-strclinic-free-audit${htmlMode?'.html':'.pdf'}`;
   const outputPath = path.resolve(outputFile);
 
