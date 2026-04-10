@@ -478,15 +478,8 @@ p:last-child{margin-bottom:0;}
     </div>
   </div>
 
-  <!-- CTA -->
-  <div class="cta-block">
-    <div class="cta-lbl">One report. One payment. Your listing fixed.</div>
-    <div class="cta-price">{{CURRENCY}}199</div>
-    <div class="cta-price-sub">One-off &nbsp;·&nbsp; No subscription &nbsp;·&nbsp; Yours to keep</div>
-    <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.12em;margin-bottom:10px;position:relative;z-index:1;">Personally reviewed by Brandon before it leaves us</div>
-    <a class="cta-btn" href="{{STRIPE_URL}}">Order Your Full Report</a>
-    <div class="cta-url">strclinic.com &nbsp;·&nbsp; Secure checkout via Stripe</div>
-  </div>
+  <!-- CTA — dynamically injected based on persona (hard/medium/soft) -->
+  {{CTA_BLOCK}}
 
   <div class="page-foot page-foot--lt">
     <span class="pf-brand pf-brand--lt">STR Clinic · strclinic.com</span>

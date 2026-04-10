@@ -91,8 +91,12 @@ async function scrapeListingContent(listingUrl) {
         let description = null;
         try { description = descMatch ? JSON.parse('"' + descMatch[1] + '"') : null; } catch (_) { description = descMatch?.[1] || null; }
 
-        // Photo count — unique hosting image URLs
-        const photoUrls = new Set(html.match(/https:\/\/a0\.muscache\.com\/im\/pictures\/hosting\/[^\s"?]+/g) || []);
+        // Photo count — unique hosting image URLs (various Airbnb CDN subdomains)
+        const photoUrls = new Set([
+          ...(html.match(/https:\/\/a0\.muscache\.com\/im\/pictures\/hosting\/[^\s"?]+/g) || []),
+          ...(html.match(/https:\/\/a0\.muscache\.com\/im\/pictures\/[^\s"?]+/g) || []),
+          ...(html.match(/https:\/\/a\d\.muscache\.com\/im\/pictures\/[^\s"?]+/g) || []),
+        ]);
         const photoCount = photoUrls.size;
 
         // Amenities
@@ -114,8 +118,28 @@ async function scrapeListingContent(listingUrl) {
         // Room type / property type
         const roomType = (html.match(/"roomType":"([^"]+)"/) || [])[1] || null;
 
-        // Bedrooms / beds / bathrooms from og:title pattern e.g. "★5.0 · 1 bedroom · 1 bed · 1 bathroom"
-        const bedsInfo = ogTitle.match(/(\d+)\s+bed(?:room)?s?.*?(\d+)\s+bath/i);
+        // Nightly rate — try several Airbnb JSON patterns
+        let nightlyRate = null;
+        const ratePatterns = [
+          /"amount":([0-9.]+),"amountMicros"/,
+          /"basePrice":([0-9.]+)/,
+          /"discountedAmount":([0-9.]+)/,
+          /"price":{"amount":([0-9.]+)/,
+          /"nightly_price":([0-9.]+)/,
+        ];
+        for (const pat of ratePatterns) {
+          const m = html.match(pat);
+          if (m) { const v = parseFloat(m[1]); if (v > 1 && v < 5000) { nightlyRate = v; break; } }
+        }
+
+        // is_superhost
+        const isSuperhost = /["']isSuperhost["']\s*:\s*true/i.test(html) || /"superhost":true/i.test(html);
+
+        // is_guest_favourite
+        const isGuestFavourite = /["']isGuestFavorite["']\s*:\s*true/i.test(html) || /"guestFavorite":true/i.test(html);
+
+        // amenities_count
+        const amenitiesCount = amenitiesAvailable.length;
 
         resolve({
           propertyName,
@@ -124,20 +148,120 @@ async function scrapeListingContent(listingUrl) {
           photoCount,
           amenitiesAvailable,
           amenitiesUnavailable,
+          amenitiesCount,
           rating:      rating ? parseFloat(rating) : null,
           reviewCount,
           roomType,
           ogTitle,
+          nightlyRate,
+          isSuperhost,
+          isGuestFavourite,
+          calendarOccupancy: null, // populated separately
         });
       });
     });
-    req.on('error', () => resolve({ propertyName: null, location: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], rating: null, reviewCount: null, roomType: null, ogTitle: '' }));
-    req.setTimeout(20000, () => { req.destroy(); resolve({ propertyName: null, location: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], rating: null, reviewCount: null, roomType: null, ogTitle: '' }); });
+    req.on('error', () => resolve({ propertyName: null, location: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], amenitiesCount: 0, rating: null, reviewCount: null, roomType: null, ogTitle: '', nightlyRate: null, isSuperhost: false, isGuestFavourite: false, calendarOccupancy: null }));
+    req.setTimeout(20000, () => { req.destroy(); resolve({ propertyName: null, location: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], amenitiesCount: 0, rating: null, reviewCount: null, roomType: null, ogTitle: '', nightlyRate: null, isSuperhost: false, isGuestFavourite: false, calendarOccupancy: null }); });
   });
 }
 
-async function generateAIFields(data, market, scraped) {
+// Attempt to fetch calendar occupancy for the next ~90 days via Airbnb's calendar API.
+// Returns an integer 0–100 (% of days booked) or null if unavailable.
+async function scrapeCalendarOccupancy(listingUrl) {
+  const idMatch = listingUrl.match(/\/rooms\/(\d+)/);
+  if (!idMatch) return null;
+  const listingId = idMatch[1];
+  const apiKey = 'd306zoyjsyarp7uqwjvs1o5h2';
+
+  const now = new Date();
+  let totalDays = 0;
+  let bookedDays = 0;
+
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const month = d.getMonth() + 1;
+    const year = d.getFullYear();
+    const url = `https://www.airbnb.co.uk/api/v2/calendar_months?listing_id=${listingId}&month=${month}&year=${year}&count=1&_api_key=${apiKey}`;
+    try {
+      const raw = await new Promise((resolve, reject) => {
+        const req = https.get(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'X-Airbnb-API-Key': apiKey,
+            'Accept': 'application/json',
+          }
+        }, (res) => {
+          const chunks = [];
+          res.on('data', c => chunks.push(c));
+          res.on('end', () => {
+            try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
+            catch (e) { reject(e); }
+          });
+        });
+        req.on('error', reject);
+        req.setTimeout(10000, () => { req.destroy(); reject(new Error('timeout')); });
+      });
+      const days = raw?.calendar_months?.[0]?.days || [];
+      for (const day of days) {
+        if (day.available === false || day.availability === 'unavailable' || day.available_for_checkin === false) {
+          bookedDays++;
+        }
+        totalDays++;
+      }
+    } catch (_) { /* API unavailable — skip */ }
+  }
+
+  if (totalDays < 20) {
+    // API unavailable — estimate from review velocity as proxy
+    return null;
+  }
+  return Math.round((bookedDays / totalDays) * 100);
+}
+
+async function generateAIFields(data, market, scraped, persona) {
   const propertyName = data.property_name || scraped?.propertyName || 'this listing';
+
+  // Persona-appropriate fallback defaults
+  const personaDefaults = {
+    A: {
+      MAIN_INSIGHT:        `${propertyName} is clearly popular — but the nightly rate is leaving real money on the table. High occupancy at a low rate means you're subsidising guests.`,
+      QUICK_WIN:           `Raise your nightly rate by 15–20% and monitor occupancy for 3 weeks. You'll earn more even if a few nights go unbooked.`,
+      FREE_TIP:            `Add a minimum stay of 3 nights on weekends. It reduces low-rate short stays and lifts your weekly average.`,
+      BRANDON_NOTE_LINE_1: `${propertyName} is filling up — which tells me the demand is there.`,
+      BRANDON_NOTE_LINE_2: `But high occupancy at a low rate is not winning. You're leaving money in guests' pockets.`,
+      BRANDON_NOTE_LINE_3: `The full report shows you exactly where to raise rates without losing occupancy.`,
+      cta_strength:        'medium',
+    },
+    B: {
+      MAIN_INSIGHT:        `${propertyName} is performing well — strong reviews, solid occupancy, and a well-structured listing. The opportunity now is expansion, not repair.`,
+      QUICK_WIN:           `Duplicate your Airbnb listing copy to Vrbo or Booking.com. Your listing is strong enough to convert on a second platform with minimal adaptation.`,
+      FREE_TIP:            `A/B test two cover photos by switching them monthly. Your current photos are working — a stronger hero shot could push your conversion rate higher.`,
+      BRANDON_NOTE_LINE_1: `${propertyName} is doing what most listings don't — the reviews and occupancy back that up.`,
+      BRANDON_NOTE_LINE_2: `The gap for you isn't the listing itself — it's the channels you're not yet on.`,
+      BRANDON_NOTE_LINE_3: `The full report gives you platform-ready copy so you don't have to adapt it yourself.`,
+      cta_strength:        'soft',
+    },
+    C: {
+      MAIN_INSIGHT:        `${propertyName} has a solid foundation but isn't converting the visibility it earns. This is usually a pricing, title, or platform distribution problem — not a content problem.`,
+      QUICK_WIN:           `Lower your nightly rate by 10% for the next 30 days to build booking momentum. Reviews drive algorithm ranking — early traction is worth the short-term margin.`,
+      FREE_TIP:            `Update your listing title to include a specific location keyword. Guests searching for your area won't find you if your title doesn't name it clearly.`,
+      BRANDON_NOTE_LINE_1: `${propertyName} looks well set up — but the bookings aren't matching the listing quality.`,
+      BRANDON_NOTE_LINE_2: `That gap is usually pricing, title visibility, or platform reach — none of which requires a rewrite from scratch.`,
+      BRANDON_NOTE_LINE_3: `The full report pinpoints exactly which lever to pull first.`,
+      cta_strength:        'medium',
+    },
+    D: {
+      MAIN_INSIGHT:        `${propertyName} has meaningful gaps in its listing that are directly costing bookings right now. The title, description, and photo sequence all need attention before anything else.`,
+      QUICK_WIN:           `Rewrite your title to lead with your single most compelling feature — be specific. Swap "Cosy cottage" for the one thing guests will pay more for.`,
+      FREE_TIP:            `Add your check-in and check-out times, house rules, and local highlights to your description. It reduces pre-booking questions and signals a professional host.`,
+      BRANDON_NOTE_LINE_1: `${propertyName} has potential that the current listing isn't communicating.`,
+      BRANDON_NOTE_LINE_2: `Weak title, thin description, and low photo count together suppress search ranking and conversion.`,
+      BRANDON_NOTE_LINE_3: `The full report gives you the exact copy and photo sequence to fix this — ready to paste in.`,
+      cta_strength:        'hard',
+    },
+  };
+  const pDef = personaDefaults[persona] || personaDefaults['D'];
+
   const fallback = {
     title_score:         5,
     desc_score:          5,
@@ -145,12 +269,14 @@ async function generateAIFields(data, market, scraped) {
     pricing_score:       5,
     platform_score:      5,
     overall_score:       50,
-    MAIN_INSIGHT:        `${propertyName} has specific gaps in its listing that are directly impacting search visibility and conversion rate.`,
-    QUICK_WIN:           `Rewrite your title to lead with your single best feature — the one thing a guest would pay more for. Paste it in today.`,
-    FREE_TIP:            `Add your check-in and check-out times to your listing description. It reduces pre-booking messages and signals a professional host.`,
-    BRANDON_NOTE_LINE_1: `${propertyName} has real differentiators that your current listing doesn't surface clearly.`,
-    BRANDON_NOTE_LINE_2: `Guests who would choose you aren't seeing what makes you different — that's a direct revenue gap.`,
-    BRANDON_NOTE_LINE_3: `The full report gives you the exact copy, sequence, and pricing to close it — ready to paste in.`,
+    persona:             persona || 'D',
+    cta_strength:        pDef.cta_strength,
+    MAIN_INSIGHT:        pDef.MAIN_INSIGHT,
+    QUICK_WIN:           pDef.QUICK_WIN,
+    FREE_TIP:            pDef.FREE_TIP,
+    BRANDON_NOTE_LINE_1: pDef.BRANDON_NOTE_LINE_1,
+    BRANDON_NOTE_LINE_2: pDef.BRANDON_NOTE_LINE_2,
+    BRANDON_NOTE_LINE_3: pDef.BRANDON_NOTE_LINE_3,
   };
 
   const taskId = `CDR-AI-FIELDS-${Date.now()}`;
@@ -167,6 +293,19 @@ async function generateAIFields(data, market, scraped) {
     ? scraped.amenitiesUnavailable.join(', ')
     : 'none noted';
 
+  const personaDescriptions = {
+    A: 'PERSONA A — BUSY BUT UNDERCHARGING: High occupancy (>70%) but nightly rate is low for the market. Hook: They think they\'re winning but they\'re subsidising guests.',
+    B: 'PERSONA B — WELL OPTIMISED, WELL PRICED: Strong overall score (>74), occupancy >65%, review score >4.7. Hook: Genuine praise. No hard sell. These people share audits.',
+    C: 'PERSONA C — GOOD LISTING, LOW BOOKINGS: Decent score (>60) but occupancy <40%. Hook: Visibility, pricing or platform problem — not a content problem.',
+    D: 'PERSONA D — NEEDS WORK: Low score, weak bookings, low/few reviews. Hook: Direct, specific, urgent.',
+  };
+  const ctaInstructions = {
+    A: 'cta_strength: return "medium"',
+    B: 'cta_strength: return "soft"',
+    C: 'cta_strength: return "medium"',
+    D: 'cta_strength: return "hard"',
+  };
+
   const brief = `You are CDR-WRITER for STR Clinic. Analyse this Airbnb listing and return scored output as JSON.
 
 ## Listing Data
@@ -178,7 +317,21 @@ Description: ${scraped?.description || '(not available)'}
 Photo count: ${scraped?.photoCount ?? 'unknown'}
 Amenities available (${scraped?.amenitiesAvailable?.length ?? 0}): ${amenList}
 Amenities unavailable/missing: ${amenMissing}
-Guest rating: ${scraped?.rating ?? 'unknown'} | Review count: ${scraped?.reviewCount ?? 'unknown'}
+Guest rating: ${scraped?.rating ?? 'unknown'} / 5 | Review count: ${scraped?.reviewCount ?? 'unknown'}
+Nightly rate: ${scraped?.nightlyRate ? `${market.sym}${scraped.nightlyRate}` : 'unknown'}
+Is Superhost: ${scraped?.isSuperhost ?? 'unknown'}
+Is Guest Favourite: ${scraped?.isGuestFavourite ?? 'unknown'}
+Calendar occupancy (next 90 days): ${scraped?.calendarOccupancy != null ? `${scraped.calendarOccupancy}%` : 'unknown'}
+
+## Persona Classification
+This listing has been pre-classified as: PERSONA ${persona}
+${personaDescriptions[persona] || personaDescriptions['D']}
+
+Write ALL text fields (MAIN_INSIGHT, QUICK_WIN, FREE_TIP, BRANDON_NOTE lines) in the persona-appropriate tone and angle described above.
+- Persona A: Acknowledge the busy listing, pivot to the pricing opportunity. Don't call them out harshly — they're doing well, just undervaluing.
+- Persona B: Lead with genuine praise. Be specific. Soft sell only — mention what the full report adds (platform copy, multi-channel), but don't push hard.
+- Persona C: Focus on distribution, visibility, or pricing as the likely lever. NOT a content criticism — the listing has good bones.
+- Persona D: Be direct and specific. Name what's weak and why it costs them. The full report is the clear next step.
 
 ## Scoring Instructions
 Score each dimension 0–10 based on what you can infer from the listing data above.
@@ -186,13 +339,15 @@ Use STR Clinic scoring criteria:
 - title_score: Does the title lead with a specific compelling feature? Is it keyword-rich, differentiated, and benefit-led? Penalise generic or vague titles.
 - desc_score: Is the description detailed, sensory, and specific? Does it answer guest objections pre-emptively? Penalise short or cliché copy.
 - photo_score: Is the photo count strong? (10+ good, 20+ excellent, <10 poor). Infer from count only — you cannot see the photos.
-- pricing_score: Infer from rating/review volume. High reviews + high rating = likely well-priced. Unknown = score 5.
+- pricing_score: Infer from rating/review volume and nightly rate. High reviews + high rating = likely well-priced. Low rate with high occupancy = undercharging (score lower).
 - platform_score: Infer from platform presence signals. Airbnb-only listing with no cross-platform signals = lower score.
 - overall_score: Weighted average (title 25%, description 25%, photos 20%, pricing 15%, platform 15%). Round to nearest integer.
 
 ## Output Instructions
 Tone: STR Clinic — direct, expert, no fluff. Written for UK short-term rental hosts. Brandon's voice: experienced host, host-to-host, practical.
 BRANDON_NOTE lines must feel personal and specific to THIS listing — reference actual property name, location, or a specific detail from the description or amenities.
+No generic phrases like "I noticed" or "it seems" — state observations directly. Max 20 words per BRANDON_NOTE line.
+${ctaInstructions[persona] || ctaInstructions['D']}
 Return ONLY valid JSON, no commentary, no markdown:
 {
   "title_score": <0-10>,
@@ -201,12 +356,14 @@ Return ONLY valid JSON, no commentary, no markdown:
   "pricing_score": <0-10>,
   "platform_score": <0-10>,
   "overall_score": <0-100>,
-  "MAIN_INSIGHT": "2-3 sentences — the single most important thing this host needs to know, specific to their listing",
-  "QUICK_WIN": "1-2 sentences — the fastest highest-impact change they can make today, specific to their listing",
-  "FREE_TIP": "1-2 sentences — a useful tactical tip not covered elsewhere",
-  "BRANDON_NOTE_LINE_1": "Warm, direct, host-to-host — reference a specific detail about this property (max 20 words)",
-  "BRANDON_NOTE_LINE_2": "Specific observation tied to their scores or listing content (max 20 words)",
-  "BRANDON_NOTE_LINE_3": "Encouraging close with a clear next step (max 20 words)"
+  "persona": "${persona}",
+  "cta_strength": "<soft|medium|hard>",
+  "MAIN_INSIGHT": "2-3 sentences, persona-appropriate, references actual listing data",
+  "QUICK_WIN": "1 specific actionable thing referencing actual listing details",
+  "FREE_TIP": "genuinely useful, not a teaser for paid report",
+  "BRANDON_NOTE_LINE_1": "Specific detail about this property (max 20 words)",
+  "BRANDON_NOTE_LINE_2": "Revenue/booking implication (max 20 words)",
+  "BRANDON_NOTE_LINE_3": "Encouraging close with next step (max 20 words)"
 }
 
 Write result to: ${resultPath}`;
@@ -266,6 +423,8 @@ Write result to: ${resultPath}`;
         pricing_score:       typeof fields.pricing_score  === 'number' ? fields.pricing_score  : fallback.pricing_score,
         platform_score:      typeof fields.platform_score === 'number' ? fields.platform_score : fallback.platform_score,
         overall_score:       typeof fields.overall_score  === 'number' ? fields.overall_score  : fallback.overall_score,
+        persona:             fields.persona              || fallback.persona,
+        cta_strength:        fields.cta_strength         || fallback.cta_strength,
         MAIN_INSIGHT:        fields.MAIN_INSIGHT        || fallback.MAIN_INSIGHT,
         QUICK_WIN:           fields.QUICK_WIN           || fallback.QUICK_WIN,
         FREE_TIP:            fields.FREE_TIP            || fallback.FREE_TIP,
@@ -285,6 +444,85 @@ Write result to: ${resultPath}`;
 
   console.warn('CDR result timed out after 120s — using fallback');
   return fallback;
+}
+
+// Classify listing into persona A/B/C/D based on scraped data.
+// Call this BEFORE generateAIFields so the persona can be included in the brief.
+function classifyPersona(scraped, market) {
+  const occupancy   = scraped.calendarOccupancy; // % or null
+  const nightlyRate = scraped.nightlyRate;        // number or null
+  const reviewScore = scraped.rating;             // float or null
+  const reviewCount = scraped.reviewCount || 0;
+
+  // Estimate occupancy from review velocity + quality signals when calendar data unavailable
+  let effectiveOccupancy = occupancy;
+  if (effectiveOccupancy === null) {
+    // Base estimate from review count (proxy for booking velocity)
+    if (reviewCount > 200)      effectiveOccupancy = 75;
+    else if (reviewCount > 100) effectiveOccupancy = 65;
+    else if (reviewCount > 50)  effectiveOccupancy = 52;
+    else if (reviewCount > 20)  effectiveOccupancy = 38;
+    else if (reviewCount > 10)  effectiveOccupancy = 28;
+    else                        effectiveOccupancy = 15;
+
+    // Boost estimate for quality signals that correlate with high occupancy
+    if (scraped.isSuperhost)      effectiveOccupancy += 8;
+    if (scraped.isGuestFavourite) effectiveOccupancy += 10;
+    if (reviewScore !== null && reviewScore >= 4.9) effectiveOccupancy += 5;
+  }
+
+  // Low-rate threshold: UK rural < £120, UK urban < £150; others proportional
+  const isRuralUK = market.code === 'GBP' &&
+    !/london|manchester|edinburgh|bristol|oxford|cambridge|bath|brighton|york|birmingham|liverpool/i.test(scraped.location || '');
+  const lowRateThreshold = market.code === 'GBP' ? (isRuralUK ? 120 : 150) :
+    market.code === 'USD' ? 180 : market.code === 'EUR' ? 140 : 150;
+
+  const isLowRate        = nightlyRate !== null && nightlyRate < lowRateThreshold;
+  const isHighOccupancy  = effectiveOccupancy > 70;
+  const isMediumOccupancy = effectiveOccupancy > 65;
+  const isLowOccupancy   = effectiveOccupancy < 40;
+  const isHighRating     = reviewScore !== null && reviewScore > 4.7;
+
+  // Persona A: Busy but undercharging
+  if (isHighOccupancy && isLowRate) return 'A';
+
+  // Persona B: Well optimised — needs overall_score > 74, but we don't have that yet.
+  // Use strong review signals as a proxy: high rating + many reviews + medium+ occupancy.
+  if (isHighRating && reviewCount > 50 && isMediumOccupancy) return 'B';
+
+  // Persona C: Good listing, low bookings
+  if (isLowOccupancy && (isHighRating || reviewCount > 20)) return 'C';
+
+  // Persona D: Needs work
+  return 'D';
+}
+
+function buildCtaBlock(ctaStrength, currency, stripeUrl) {
+  if (ctaStrength === 'hard') {
+    return `<div class="cta-block">
+    <div class="cta-lbl">One report. One payment. Your listing fixed.</div>
+    <div class="cta-price">${currency}199</div>
+    <div class="cta-price-sub">One-off &nbsp;·&nbsp; No subscription &nbsp;·&nbsp; Yours to keep</div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.12em;margin-bottom:10px;position:relative;z-index:1;">Personally reviewed by Brandon before it leaves us</div>
+    <a class="cta-btn" href="${stripeUrl}">Order Your Full Report</a>
+    <div class="cta-url">strclinic.com &nbsp;·&nbsp; Secure checkout via Stripe</div>
+  </div>`;
+  } else if (ctaStrength === 'medium') {
+    return `<div class="cta-block">
+    <div class="cta-lbl">Want to see what the full report covers?</div>
+    <div class="cta-price">${currency}199</div>
+    <div class="cta-price-sub">One-off &nbsp;·&nbsp; No subscription &nbsp;·&nbsp; Yours to keep</div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.12em;margin-bottom:10px;position:relative;z-index:1;">Personally reviewed by Brandon before it leaves us</div>
+    <a class="cta-btn" href="${stripeUrl}">See What the Full Report Covers</a>
+    <div class="cta-url">strclinic.com &nbsp;·&nbsp; Secure checkout via Stripe</div>
+  </div>`;
+  } else {
+    // soft
+    return `<div class="cta-block" style="background:rgba(26,26,46,0.06);border:1px solid rgba(26,26,46,0.12);box-shadow:none;padding:20px 24px;">
+    <div class="cta-lbl" style="color:#374151;font-size:12px;">Your listing is performing well. If you ever want to go deeper —</div>
+    <a class="cta-btn" href="${stripeUrl}" style="background:#1A1A2E;color:#E8C840;margin-top:12px;display:inline-block;padding:10px 24px;text-decoration:none;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.08em;">strclinic.com</a>
+  </div>`;
+  }
 }
 
 function populate(template, vars) {
@@ -327,10 +565,17 @@ async function main() {
   let vars;
 
   if (directMode) {
-    // --direct: input JSON contains all 33 vars ready to use
+    // --direct: input JSON contains all vars ready to use
     vars = { ...data };
     // Ensure DATE has a fallback
     if (!vars.DATE) vars.DATE = new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+    // Build CTA_BLOCK if not pre-supplied (backward compat with old direct JSONs)
+    if (!vars.CTA_BLOCK) {
+      const ctaStr = vars.CTA_STRENGTH || 'hard';
+      const currency = vars.CURRENCY || '£';
+      const stripeUrl = vars.STRIPE_URL || STRIPE_GBP;
+      vars.CTA_BLOCK = buildCtaBlock(ctaStr, currency, stripeUrl);
+    }
     console.log('Direct mode — using vars from JSON, skipping market detection and AI calls');
   } else {
     // Scrape full listing content from Airbnb
@@ -339,13 +584,19 @@ async function main() {
       !data.location      || /^(uk|unknown|unknown location|)$/i.test(data.location.trim()) ||
       !data.title_score   // always scrape if scores not pre-filled
     );
-    let scraped = { propertyName: null, location: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], rating: null, reviewCount: null, roomType: null, ogTitle: '' };
+    let scraped = { propertyName: null, location: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], amenitiesCount: 0, rating: null, reviewCount: null, roomType: null, ogTitle: '', nightlyRate: null, isSuperhost: false, isGuestFavourite: false, calendarOccupancy: null };
     if (shouldScrape) {
       console.log('Scraping full listing content from Airbnb...');
       scraped = await scrapeListingContent(data.listing_url);
       if (scraped.propertyName) { data.property_name = scraped.propertyName; console.log(`  Property: ${data.property_name}`); }
       if (scraped.location)     { data.location = scraped.location; console.log(`  Location: ${data.location}`); }
-      console.log(`  Photos: ${scraped.photoCount} | Amenities: ${scraped.amenitiesAvailable.length} | Rating: ${scraped.rating} (${scraped.reviewCount} reviews)`);
+      console.log(`  Photos: ${scraped.photoCount} | Amenities: ${scraped.amenitiesCount} | Rating: ${scraped.rating} (${scraped.reviewCount} reviews)`);
+      console.log(`  Nightly rate: ${scraped.nightlyRate ?? 'unknown'} | Superhost: ${scraped.isSuperhost} | Guest Fave: ${scraped.isGuestFavourite}`);
+
+      // Fetch calendar occupancy separately
+      console.log('Fetching calendar occupancy...');
+      scraped.calendarOccupancy = await scrapeCalendarOccupancy(data.listing_url);
+      console.log(`  Calendar occupancy: ${scraped.calendarOccupancy != null ? scraped.calendarOccupancy + '%' : 'unavailable (using estimate)'}`);
     }
 
     // Scrape calendar occupancy via Browser Use (non-blocking — null triggers fallback heuristic)
@@ -357,7 +608,12 @@ async function main() {
 
     const market = detectMarket(data);
     const sym = market.sym;
-    const aiFields = await generateAIFields(data, market, scraped);
+
+    // Classify persona before AI call so it can inform the brief
+    const persona = classifyPersona(scraped, market);
+    console.log(`  Persona: ${persona}`);
+
+    const aiFields = await generateAIFields(data, market, scraped, persona);
     const p2 = PLATFORM_INFO[market.p2] || { desc:'', bench:()=>'' };
     const p3 = PLATFORM_INFO[market.p3] || { desc:'', bench:()=>'' };
     const stripeUrl = market.code === 'GBP' ? STRIPE_GBP : STRIPE_USD;
@@ -369,6 +625,12 @@ async function main() {
     // Scores from CDR-WRITER are on a 0–10 scale; template uses width:N%.
     // Multiply by 10 when ≤ 10 so a score of 7.5 → 75% bar width, not 7.5%.
     const toBarPct = (v) => { const n = Number(v) || 0; return n > 10 ? Math.round(n) : Math.round(n * 10); };
+
+    // Final persona: use AI-confirmed persona if returned, else keep pre-classified
+    const finalPersona   = aiFields.persona || persona;
+    const ctaStrength    = aiFields.cta_strength || (finalPersona === 'B' ? 'soft' : finalPersona === 'D' ? 'hard' : 'medium');
+    const ctaBlock       = buildCtaBlock(ctaStrength, sym, stripeUrl);
+    console.log(`  Final persona: ${finalPersona} | CTA strength: ${ctaStrength}`);
 
     vars = {
       PROPERTY_NAME:       data.property_name || '',
@@ -404,6 +666,9 @@ async function main() {
       BRANDON_NOTE_LINE_1: aiFields.BRANDON_NOTE_LINE_1,
       BRANDON_NOTE_LINE_2: aiFields.BRANDON_NOTE_LINE_2,
       BRANDON_NOTE_LINE_3: aiFields.BRANDON_NOTE_LINE_3,
+      PERSONA:             finalPersona,
+      CTA_STRENGTH:        ctaStrength,
+      CTA_BLOCK:           ctaBlock,
     };
   }
 

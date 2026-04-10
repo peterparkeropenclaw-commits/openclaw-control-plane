@@ -1,2 +1,4 @@
 node_modules/
 *.pdf
+test-*-output.html
+test-direct-output.html
