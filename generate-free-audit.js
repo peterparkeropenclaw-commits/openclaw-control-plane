@@ -4,6 +4,8 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
+const http = require('http');
 
 const args = process.argv.slice(2);
 const getArg = (flag) => { const i = args.indexOf(flag); return i !== -1 ? args[i+1] : null; };
@@ -51,6 +53,39 @@ const PLATFORM_INFO = {
   'Stayz':            { desc: "Australia's leading holiday rental platform. Reaches domestic travellers who don't use Airbnb.",                                                  bench: () => 'A$5k–9k additional per year for well-listed properties' },
 };
 
+// Scrape property name and location from an Airbnb listing page.
+// Returns { propertyName, location } — either may be null if not found.
+async function scrapeListingBasics(listingUrl) {
+  return new Promise((resolve) => {
+    const protocol = listingUrl.startsWith('https') ? https : http;
+    const req = protocol.get(listingUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-GB,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      }
+    }, (res) => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => {
+        const html = Buffer.concat(chunks).toString('utf8');
+        const ogTitle = (html.match(/property="og:title"\s+content="([^"]+)"/) || html.match(/content="([^"]+)"\s+property="og:title"/) || [])[1] || '';
+        const propertyName = (html.match(/"name":"([^"]+)"/)||[])[1]?.split('·')[0]?.trim()
+          || ogTitle.replace(/·.*$/, '').replace(/Entire.*?in /i, '').trim()
+          || null;
+        const locMatch = html.match(/"addressLocality"\s*:\s*"([^"]+)"/) || html.match(/"city"\s*:\s*"([^"]+)"/);
+        const location = locMatch ? locMatch[1] : null;
+        const regionMatch = html.match(/"addressRegion"\s*:\s*"([^"]+)"/);
+        const region = regionMatch ? regionMatch[1] : null;
+        const fullLocation = [location, region].filter(Boolean).join(', ') || null;
+        resolve({ propertyName: propertyName || null, location: fullLocation || null });
+      });
+    });
+    req.on('error', () => resolve({ propertyName: null, location: null }));
+    req.setTimeout(15000, () => { req.destroy(); resolve({ propertyName: null, location: null }); });
+  });
+}
+
 async function generateAIFields(data, market) {
   const fallback = {
     MAIN_INSIGHT:        `Your listing score of ${data.overall_score}/100 points to specific gaps directly impacting your search ranking and conversion rate.`,
@@ -88,6 +123,22 @@ async function main() {
     if (!vars.DATE) vars.DATE = new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'});
     console.log('Direct mode — using vars from JSON, skipping market detection and AI calls');
   } else {
+    // Scrape property name and location if not provided or left blank by caller
+    const isGenericName = !data.property_name || /^(your\s+property|)$/i.test(data.property_name.trim());
+    const isGenericLocation = !data.location || /^(uk|unknown|unknown location|)$/i.test(data.location.trim());
+    if (data.listing_url && (isGenericName || isGenericLocation)) {
+      console.log('Scraping listing basics from Airbnb...');
+      const scraped = await scrapeListingBasics(data.listing_url);
+      if (isGenericName && scraped.propertyName) {
+        data.property_name = scraped.propertyName;
+        console.log(`  Property name: ${data.property_name}`);
+      }
+      if (isGenericLocation && scraped.location) {
+        data.location = scraped.location;
+        console.log(`  Location: ${data.location}`);
+      }
+    }
+
     const market = detectMarket(data);
     const sym = market.sym;
     const aiFields = await generateAIFields(data, market);
