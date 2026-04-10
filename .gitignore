@@ -5,3 +5,6 @@ node_modules/
 # SQLite WAL/SHM files
 *.db-shm
 *.db-wal
+
+# Daily memory files — may contain credentials
+memory/*.md
