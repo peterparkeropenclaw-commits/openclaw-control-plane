@@ -96,17 +96,102 @@ async function generateAIFields(data, market) {
     BRANDON_NOTE_LINE_3: `The full report gives you the exact copy, sequence, and pricing to close it — ready to paste in.`,
   };
 
-  let OpenAIClass;
-  try { const mod = require('openai'); OpenAIClass = mod.OpenAI || mod.default || mod; } catch(e) { console.warn('openai not found — using fallback'); return fallback; }
-  if (!process.env.OPENAI_API_KEY) { console.warn('OPENAI_API_KEY not set — using fallback'); return fallback; }
+  const taskId = `CDR-AI-FIELDS-${Date.now()}`;
+  const workspaceMemory = process.env.CDR_RESULT_DIR
+    || path.join(process.env.HOME || '/tmp', '.openclaw', 'workspace', 'memory');
+  const resultPath = path.join(workspaceMemory, `CDR-AI-RESULT-${taskId}.json`);
+  const authToken = process.env.TRIGGER_AUTH_TOKEN || '';
+  const s = (key, fallbackVal = 0) => data[key] || (data.scores && data.scores[key]) || fallbackVal;
+
+  const brief = `Generate AI content fields for an STR Clinic audit report.
+
+Property: ${data.property_name || 'Unknown'}
+Location: ${data.location || 'Unknown'}
+Score: ${data.overall_score || 0}/100
+Title score: ${s('title_score')}/10, Photo: ${s('photo_score')}/10, Description: ${s('desc_score')}/10, Pricing: ${s('pricing_score')}/10, Platform: ${s('platform_score')}/10
+
+Generate the following fields. STR Clinic tone: direct, expert, no fluff. UK Airbnb hosts. Brandon's voice.
+
+Return ONLY JSON, no other text:
+{
+  "MAIN_INSIGHT": "2-3 sentences — most important thing this host needs to know",
+  "QUICK_WIN": "1-2 sentences — fastest highest-impact change today",
+  "FREE_TIP": "1-2 sentences — useful tactical tip",
+  "BRANDON_NOTE_LINE_1": "First line — warm, direct, host-to-host (max 20 words)",
+  "BRANDON_NOTE_LINE_2": "Second line — specific observation from scores (max 20 words)",
+  "BRANDON_NOTE_LINE_3": "Third line — encouraging close with clear next step (max 20 words)"
+}
+
+Write result to: ${resultPath}`;
+
+  // POST to CDR webhook — endpoint configured via CDR_WEBHOOK_URL env var
+  const cdrWebhookUrl = process.env.CDR_WEBHOOK_URL;
+  if (!cdrWebhookUrl) {
+    console.warn('CDR_WEBHOOK_URL not set — using fallback AI fields');
+    return fallback;
+  }
 
   try {
-    const client = new OpenAIClass({ apiKey: process.env.OPENAI_API_KEY });
-    const prompt = `You are an expert short-term rental analyst writing a personalised free audit report.\n\nProperty: ${data.property_name}\nLocation: ${data.location}\nScore: ${data.overall_score}/100\nTop issues: ${JSON.stringify((data.top_3_issues||[]).map(i=>i.issue))}\n\nReturn ONLY a JSON object (no markdown) with these exact keys:\n{\n  "MAIN_INSIGHT": "one direct observation about the biggest gap. No hedging. Max 2 sentences.",\n  "QUICK_WIN": "one concrete thing to do today. Specific to this property. Max 2 sentences.",\n  "FREE_TIP": "a universally useful tip. Evergreen. Max 2 sentences.",\n  "BRANDON_NOTE_LINE_1": "max 20 words. Specific observation that stood out. State it, no I noticed.",\n  "BRANDON_NOTE_LINE_2": "max 20 words. What that means for revenue or bookings.",\n  "BRANDON_NOTE_LINE_3": "max 20 words. Honest pitch — what changes and why the paid report is the right next step."\n}`;
-    const resp = await client.chat.completions.create({ model:'gpt-4o-mini', messages:[{role:'user',content:prompt}], temperature:0.7, max_tokens:600 });
-    const txt = resp.choices[0].message.content.trim().replace(/^```(?:json)?\n?/,'').replace(/\n?```$/,'');
-    return JSON.parse(txt);
-  } catch(e) { console.warn('AI failed:', e.message, '— using fallback'); return fallback; }
+    await new Promise((resolve, reject) => {
+      const payload = JSON.stringify({ task_id: taskId, brief, priority: 'high', from: 'generate-script' });
+      const parsed = new URL(cdrWebhookUrl);
+      const useHttps = parsed.protocol === 'https:';
+      const transport = useHttps ? require('https') : http;
+      const req = transport.request({
+        hostname: parsed.hostname,
+        port: parsed.port || (useHttps ? 443 : 80),
+        path: parsed.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+          'Authorization': `Bearer ${authToken}`,
+        },
+      }, (res) => {
+        res.resume();
+        if (res.statusCode >= 200 && res.statusCode < 300) resolve();
+        else reject(new Error(`CDR webhook returned ${res.statusCode}`));
+      });
+      req.on('error', reject);
+      req.setTimeout(10000, () => { req.destroy(); reject(new Error('CDR webhook timeout')); });
+      req.write(payload);
+      req.end();
+    });
+    console.log(`CDR task posted: ${taskId}`);
+  } catch (e) {
+    console.warn(`CDR webhook unreachable: ${e.message} — using fallback`);
+    return fallback;
+  }
+
+  // Poll for result file (max 120s, every 3s) — async fs only
+  const maxAttempts = 40;
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise(r => setTimeout(r, 3000));
+    try {
+      const raw = JSON.parse(await fs.promises.readFile(resultPath, 'utf8'));
+      await fs.promises.unlink(resultPath).catch(() => {});
+      const fields = raw.fields || raw;
+      console.log('CDR AI fields received.');
+      return {
+        MAIN_INSIGHT:        fields.MAIN_INSIGHT        || fallback.MAIN_INSIGHT,
+        QUICK_WIN:           fields.QUICK_WIN           || fallback.QUICK_WIN,
+        FREE_TIP:            fields.FREE_TIP            || fallback.FREE_TIP,
+        BRANDON_NOTE_LINE_1: fields.BRANDON_NOTE_LINE_1 || fallback.BRANDON_NOTE_LINE_1,
+        BRANDON_NOTE_LINE_2: fields.BRANDON_NOTE_LINE_2 || fallback.BRANDON_NOTE_LINE_2,
+        BRANDON_NOTE_LINE_3: fields.BRANDON_NOTE_LINE_3 || fallback.BRANDON_NOTE_LINE_3,
+      };
+    } catch (e) {
+      if (e.code !== 'ENOENT') {
+        console.warn('Failed to parse CDR result:', e.message, '— using fallback');
+        await fs.promises.unlink(resultPath).catch(() => {});
+        return fallback;
+      }
+      // ENOENT = file not yet written, keep polling
+    }
+  }
+
+  console.warn('CDR result timed out after 120s — using fallback');
+  return fallback;
 }
 
 function populate(template, vars) {
