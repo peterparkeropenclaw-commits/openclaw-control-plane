@@ -66,3 +66,10 @@ direction for Peter and the Engineering Lead.
 At the end of every working session, before reporting [STATUS TO PETER], write a handoff file to:
 ~/.openclaw/workspace/memory/YYYY-MM-DD-head-of-product-[task-id].md
 File must contain: Completed / Pending / Blockers
+
+## Telegram — Mission Control Only
+All Telegram communications go through Mission Control exclusively.
+- **Bot token:** `8676143353:AAEcPDuDgOb3d_oOjqfo-VZGzpe7wge1Wso`
+- **Chat ID:** `-5085897499`
+
+Do not use any other bot token or chat ID. This applies to all notifications, status updates, and confirmations.
