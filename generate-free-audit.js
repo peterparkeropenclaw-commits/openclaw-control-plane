@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
+const { execFile } = require('child_process');
 
 const args = process.argv.slice(2);
 const getArg = (flag) => { const i = args.indexOf(flag); return i !== -1 ? args[i+1] : null; };
@@ -290,6 +291,38 @@ function populate(template, vars) {
   return template.replace(/\{\{([A-Z0-9_]+)\}\}/g, (match, key) => key in vars ? String(vars[key]) : match);
 }
 
+// Scrape calendar occupancy via Browser Use Python script.
+// Returns integer 0–100 (% booked) or null on any failure.
+async function scrapeCalendarOccupancy(listingUrl) {
+  if (!listingUrl) return null;
+  const scriptPath = path.join(__dirname, 'scrape_calendar.py');
+  if (!fs.existsSync(scriptPath)) {
+    console.warn('[calendar] scrape_calendar.py not found — skipping');
+    return null;
+  }
+  return new Promise((resolve) => {
+    execFile('python3.11', [scriptPath, listingUrl], { timeout: 100000 }, (err, stdout, stderr) => {
+      if (err) {
+        console.warn('[calendar] Browser Use script error:', err.message);
+        return resolve(null);
+      }
+      try {
+        const result = JSON.parse(stdout.trim());
+        if (result.occupancy != null) {
+          console.log(`[calendar] Occupancy: ${result.occupancy}% (${result.booked_days} booked, ${result.available_days} available)`);
+          resolve(result.occupancy);
+        } else {
+          console.warn('[calendar] Browser Use returned null:', result.error);
+          resolve(null);
+        }
+      } catch (e) {
+        console.warn('[calendar] Failed to parse calendar output:', stdout);
+        resolve(null);
+      }
+    });
+  });
+}
+
 async function main() {
   let vars;
 
@@ -313,6 +346,13 @@ async function main() {
       if (scraped.propertyName) { data.property_name = scraped.propertyName; console.log(`  Property: ${data.property_name}`); }
       if (scraped.location)     { data.location = scraped.location; console.log(`  Location: ${data.location}`); }
       console.log(`  Photos: ${scraped.photoCount} | Amenities: ${scraped.amenitiesAvailable.length} | Rating: ${scraped.rating} (${scraped.reviewCount} reviews)`);
+    }
+
+    // Scrape calendar occupancy via Browser Use (non-blocking — null triggers fallback heuristic)
+    if (data.listing_url && !data.occupancy_rate) {
+      console.log('[calendar] Scraping occupancy via Browser Use...');
+      const occ = await scrapeCalendarOccupancy(data.listing_url);
+      if (occ != null) data.occupancy_rate = occ;
     }
 
     const market = detectMarket(data);
