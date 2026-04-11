@@ -1080,6 +1080,30 @@ async function runAutoReconcile() {
           }
         }, 10000);
         if (!resp.ok) {
+          // Handle 404 (PR missing/deleted) specially to avoid noisy logs and infinite loops.
+          if (resp.status === 404) {
+            try {
+              // Ensure column exists
+              db.prepare("ALTER TABLE tasks ADD COLUMN reconcile_404_count INTEGER DEFAULT 0").run();
+            } catch (e) { /* ignore if column already exists */ }
+
+            const row = db.prepare("SELECT reconcile_404_count FROM tasks WHERE id = ?").get(task.id);
+            const prev = row && Number.isFinite(row.reconcile_404_count) ? row.reconcile_404_count : 0;
+            const next = prev + 1;
+            db.prepare("UPDATE tasks SET reconcile_404_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(next, task.id);
+
+            if (next >= 3) {
+              db.prepare("UPDATE tasks SET state = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(task.id);
+              db.prepare("INSERT INTO events (task_id, event_type, payload) VALUES (?, 'reconcile_failed', ?) ").run(task.id, JSON.stringify({ reason: 'reconcile_404_count>=3' }));
+              process.stderr.write(`[reconcile] task ${task.id} moved to failed after ${next} 404s from GitHub reviews API\n`);
+            } else {
+              // Log a single warning per task when we first see a 404
+              if (next === 1) process.stderr.write(`[reconcile] WARN: GitHub reviews API returned 404 for task ${task.id} — will retry up to 2 more times before failing\n`);
+            }
+            await new Promise(r => setTimeout(r, 500));
+            continue;
+          }
+
           process.stderr.write(`[reconcile] GitHub reviews API error for task ${task.id}: ${resp.status}\n`);
           await new Promise(r => setTimeout(r, 500));
           continue;
