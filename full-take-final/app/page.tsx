@@ -115,41 +115,46 @@ export default function HomePage() {
       {/* Section 3 - What you get */}
       <section style={{background:'#fff',padding:'56px 0'}}>
         <div style={{maxWidth:1200,margin:'0 auto',display:'grid',gridTemplateColumns:'1fr 1fr',gap:32,padding:'0 24px',alignItems:'start'}}>
-          <div>
-            <h3 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:48,color:NAVY}}>What you get</h3>
-            <h4 style={{marginTop:12,fontSize:18,fontWeight:700}}>The free audit</h4>
-            <ul style={{marginTop:12,lineHeight:1.6,color:'#333'}}>
-              <li>Overall score out of 10 (weighted across 5 pillars)</li>
-              <li>Scored bars: Title (20%), Photos (25%), Description (20%), Pricing (20%), Reviews (15%)</li>
-              <li>AI insight for every pillar — clear reasons, not vague fluff</li>
-              <li>One quick win you can implement today</li>
-              <li>One free tip and a revenue-impact estimate</li>
-              <li>Brandon's personal note (short, host-to-host)</li>
-              <li>PDF delivered instantly by email</li>
+          {/* Free column */}
+          <div style={{background:ALT_BG,border:'1px solid rgba(10,22,40,0.04)',borderRadius:8,padding:24}}>
+            <h3 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:40,color:NAVY,margin:0}}>Free Audit</h3>
+            <div style={{color:'#444',marginTop:6,fontWeight:700,fontSize:15}}>Instant PDF — no login</div>
+            <ul style={{marginTop:14,lineHeight:1.8,color:'#333',paddingLeft:18}}>
+              <li style={{marginBottom:8}}>✓ Overall score out of 10 (5 pillars)</li>
+              <li style={{marginBottom:8}}>✓ Scored bars per pillar</li>
+              <li style={{marginBottom:8}}>✓ AI insight for every pillar</li>
+              <li style={{marginBottom:8}}>✓ One quick win to implement today</li>
+              <li style={{marginBottom:8}}>✓ Revenue-impact estimate</li>
+              <li style={{marginBottom:8}}>✓ Brandon's personal note</li>
+              <li style={{marginBottom:8}}>✓ PDF by email in ~1–5 minutes</li>
             </ul>
+
+            <div style={{marginTop:16}}>
+              <a href="#audit-form" style={{background:GOLD,color:NAVY,borderRadius:100,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,textTransform:'uppercase',padding:'12px 22px',border:'none',fontSize:'0.95rem',cursor:'pointer',display:'inline-block',textDecoration:'none',boxShadow:'0 4px 12px rgba(232,200,64,0.25)'}}>Get Free Audit →</a>
+            </div>
           </div>
 
-          <div>
-            <div style={{borderTop:`4px solid ${GOLD}`,borderRadius:8,overflow:'hidden',boxShadow:'0 6px 18px rgba(0,0,0,0.04)'}}>
-              <div style={{position:'relative'}}>
-                <div style={{background:GOLD,color:NAVY,padding:12,fontWeight:900}}>Full Clinic — £199</div>
-                <span style={{background:'#E8C840',color:'#0A1628',fontSize:'10px',fontWeight:700,padding:'2px 10px',borderRadius:'100px',letterSpacing:'1px',float:'right'}}>MOST POPULAR</span>
-              </div>
-              <div style={{padding:16,background:'#fff'}}>
-                <ul style={{lineHeight:1.6}}>
-                  <li>★ Everything in the free audit, plus:</li>
-                  <li>★ Rewritten title & description — paste-ready</li>
-                  <li>★ Photo order plan with rationale</li>
-                  <li>★ 12‑month pricing calendar (actionable)</li>
-                  <li>★ Competitor analysis and revenue impact table</li>
-                  <li>★ Guest communication templates & platform expansion guide</li>
-                  <li>★ 3‑step expansion plan tailored to your listing</li>
-                </ul>
-                <div style={{marginTop:18}}>
-                  <a href="#audit-form" style={{background:GOLD,color:NAVY,borderRadius:100,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,textTransform:'uppercase',padding:'14px 36px',border:'none',fontSize:'1.1rem',cursor:'pointer',display:'inline-block',textDecoration:'none',marginRight:8,boxShadow:'0 4px 16px rgba(232,200,64,0.35)'}}>Get Your Free Audit</a>
-                  <a href="/buy" style={{background:'transparent',color:NAVY,border:`2px solid ${NAVY}`,borderRadius:100,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,textTransform:'uppercase',padding:'14px 36px',fontSize:'1.1rem',cursor:'pointer',display:'inline-block',textDecoration:'none'}}>Buy Full Clinic — £199</a>
-                </div>
-              </div>
+          {/* Paid column */}
+          <div style={{background:NAVY,color:'#fff',borderTop:`3px solid ${GOLD}`,borderRadius:8,padding:20,position:'relative',boxShadow:'0 8px 40px rgba(232,200,64,0.15)'}}>
+            <div style={{position:'absolute',top:12,right:12,background:GOLD,color:NAVY,padding:'6px 10px',borderRadius:6,fontWeight:900,fontSize:11}}>MOST POPULAR</div>
+            <h3 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:40,color:GOLD,marginTop:6,marginBottom:2}}>Full Clinic</h3>
+            <div style={{color:'rgba(255,255,255,0.8)',marginBottom:12,fontWeight:700}}>£199 one-off</div>
+
+            <ul style={{marginTop:6,lineHeight:1.8,color:'#fff',paddingLeft:18}}>
+              <li style={{marginBottom:8}}>✓ Everything in the free audit</li>
+              <li style={{marginBottom:8}}>★ Rewritten title & description — paste-ready</li>
+              <li style={{marginBottom:8}}>★ Photo order plan with rationale</li>
+              <li style={{marginBottom:8}}>★ 12-month pricing calendar</li>
+              <li style={{marginBottom:8}}>★ Competitor analysis & revenue impact table</li>
+              <li style={{marginBottom:8}}>★ Guest communication templates</li>
+              <li style={{marginBottom:8}}>★ Platform expansion guide (Vrbo, Booking.com)</li>
+              <li style={{marginBottom:8}}>★ 3-step growth plan</li>
+            </ul>
+
+            <div style={{marginTop:18,display:'flex',flexDirection:'column',gap:12,alignItems:'flex-start'}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:44,color:GOLD}}>£199</div>
+              <a href="/buy" style={{background:GOLD,color:NAVY,borderRadius:100,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,textTransform:'uppercase',padding:'12px 22px',border:'none',fontSize:'0.95rem',cursor:'pointer',textDecoration:'none',boxShadow:'0 6px 20px rgba(10,22,40,0.12)'}}>Buy Full Clinic — £199</a>
+              <div style={{fontSize:12,opacity:0.85,fontStyle:'italic',marginTop:6}}>Brandon reviews every paid clinic personally</div>
             </div>
           </div>
         </div>
@@ -235,6 +240,33 @@ export default function HomePage() {
           </div>
 
           <div style={{marginTop:28,color:GOLD,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:28}}>Fresh eyes. Scored. Specific. That's what the audit is.</div>
+        </div>
+      </section>
+
+      {/* Section 6 - Brandon About section */}
+      <section id="about" style={{background:'#fff',padding:'96px 0'}}>
+        <div style={{maxWidth:1200,margin:'0 auto',display:'grid',gridTemplateColumns:'1fr 1fr',gap:40,alignItems:'center',padding:'0 24px'}}>
+          {/* Photo placeholder */}
+          <div style={{display:'flex',justifyContent:'center'}}>
+            <div style={{width:160,height:160,borderRadius:160/2,background:NAVY,border:`3px solid ${GOLD}`,display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,color:GOLD,fontSize:48,letterSpacing:1}}>BC</div>
+            </div>
+          </div>
+
+          {/* Bio text */}
+          <div>
+            <div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:11,fontWeight:700,letterSpacing:1, textTransform:'uppercase',color:GOLD,marginBottom:10}}>ABOUT BRANDON</div>
+            <h2 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:36, textTransform:'uppercase',color:NAVY,margin:0,marginBottom:12}}>Host-to-host. No agency.</h2>
+            <p style={{fontFamily:"Inter, system-ui, sans-serif",fontSize:16,color:'rgba(10,22,40,0.8)',marginTop:6,marginBottom:18,lineHeight:1.6}}>Brandon has managed short-term rentals for over a decade — not as an agency, but as a host. Every STR Clinic audit is written by him personally, based on what actually moves bookings: stronger copy, smarter pricing, and a listing algorithm can actually find.</p>
+
+            <div style={{display:'flex',gap:12,marginBottom:14}}>
+              {['10+ years hosting','500+ audits','Avg. +£200/mo uplift'].map((s,i)=> (
+                <div key={i} style={{background:NAVY,color:GOLD,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,padding:'8px 12px',borderRadius:6,fontSize:14}}>{s}</div>
+              ))}
+            </div>
+
+            <div style={{fontSize:14,color:'rgba(10,22,40,0.6)'}}>Questions? <a href="mailto:brandon@strclinic.com" style={{color:'rgba(10,22,40,0.8)',textDecoration:'underline'}}>brandon@strclinic.com</a></div>
+          </div>
         </div>
       </section>
 
