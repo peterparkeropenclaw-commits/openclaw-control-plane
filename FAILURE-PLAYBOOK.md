@@ -117,3 +117,31 @@ Escalate to Brandon ONLY when:
 - Heartbeat does not mutate state
 - Archived tasks never appear active
 - `/health/full` = PASS before trusting automation
+
+---
+
+## Session Handoff Protocol (ENG-019-PR-C)
+
+**Mandatory at every session end.** All department heads must write a handoff file before reporting [STATUS TO PETER].
+
+### File path convention
+```
+~/.openclaw/workspace/memory/YYYY-MM-DD-[agent-name]-[task-id].md
+```
+
+### Required content
+```markdown
+## Completed
+- What was done this session
+
+## Pending
+- What remains to be done
+
+## Blockers
+- Any blockers (or "none")
+```
+
+### Enforcement
+- Department heads: must write handoff before status report
+- Peter: will reject status reports without accompanying handoff file for multi-session tasks
+- Workers: not required (session-scoped only)
