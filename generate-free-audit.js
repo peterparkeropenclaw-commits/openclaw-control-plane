@@ -564,32 +564,34 @@ function populate(template, vars) {
   return template.replace(/\{\{([A-Z0-9_]+)\}\}/g, (match, key) => key in vars ? String(vars[key]) : match);
 }
 
-// Scrape calendar occupancy via Browser Use Python script.
-// Returns integer 0–100 (% booked) or null on any failure.
+// Scrape calendar occupancy via Playwright script (ENG-034).
+// Returns float 0–1 (occupancy ratio) or null on any failure.
+// Falls back gracefully — never throws, always returns null on error.
 async function scrapeCalendarOccupancy(listingUrl) {
   if (!listingUrl) return null;
-  const scriptPath = path.join(__dirname, 'scrape_calendar.py');
+  const scriptPath = path.join(__dirname, 'scrape_calendar_playwright.js');
   if (!fs.existsSync(scriptPath)) {
-    console.warn('[calendar] scrape_calendar.py not found — skipping');
+    console.warn('[calendar] scrape_calendar_playwright.js not found — skipping');
     return null;
   }
   return new Promise((resolve) => {
-    execFile('python3.11', [scriptPath, listingUrl], { timeout: 100000 }, (err, stdout, stderr) => {
-      if (err) {
-        console.warn('[calendar] Browser Use script error:', err.message);
+    execFile('node', [scriptPath, listingUrl], { timeout: 35000 }, (err, stdout, stderr) => {
+      if (err && !stdout) {
+        console.warn('[calendar] Playwright scraper error:', err.message);
         return resolve(null);
       }
       try {
         const result = JSON.parse(stdout.trim());
         if (result.occupancy != null) {
-          console.log(`[calendar] Occupancy: ${result.occupancy}% (${result.booked_days} booked, ${result.available_days} available)`);
+          const pct = Math.round(result.occupancy * 100);
+          console.log(`[calendar] Occupancy: ${pct}% (${result.booked_days} booked / ${result.total_days} days)`);
           resolve(result.occupancy);
         } else {
-          console.warn('[calendar] Browser Use returned null:', result.error);
+          console.warn('[calendar] Playwright returned null:', result.error || 'unknown');
           resolve(null);
         }
       } catch (e) {
-        console.warn('[calendar] Failed to parse calendar output:', stdout);
+        console.warn('[calendar] Failed to parse Playwright output:', (stdout || '').slice(0, 200));
         resolve(null);
       }
     });
