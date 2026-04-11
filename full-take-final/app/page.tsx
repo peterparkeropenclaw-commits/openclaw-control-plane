@@ -281,10 +281,13 @@ export default function HomePage() {
       </section>
 
       {/* Section 7 - FAQ */}
-      <section style={{background:ALT_BG,padding:'48px 0'}}>
+      <section id="faq" style={{background:ALT_BG,padding:'48px 0'}}>
         <div style={{maxWidth:920,margin:'0 auto',padding:'0 24px'}}>
           <h3 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:32,color:NAVY,marginBottom:18}}>FAQ</h3>
-          <FAQ />
+          <div>
+            {/* faqItems is defined below */}
+            <Accordion items={faqItems} />
+          </div>
         </div>
       </section>
 
@@ -354,28 +357,14 @@ function AuditForm(){
   )
 }
 
-function FAQ(){
-  const items = [
-    {q:'How fast is the free audit?', a:"Instant — you'll get a PDF by email within a few minutes."},
-    {q:'What do you need from me?', a:'Only the listing URL and an email. No calendar access, no passwords.'},
-    {q:'Is my listing data private?', a:'Yes. We never contact your guests or publish your listing.'},
-    {q:'How long until I get the paid report?', a:"Within 48 hours; most arrive faster. Brandon reviews each one personally."},
-    {q:'Can I use this for Vrbo or Booking.com listings?', a:"Yes — paste any Airbnb or Vrbo URL. Booking.com support is coming soon."},
-  ];
-  const [open,setOpen]=useState<number|null>(0);
-  return (
-    <div>
-      {items.map((it,i)=> (
-        <div key={i} style={{marginBottom:12,background:'#fff',padding:14,borderRadius:6,border:'1px solid #eee'}}>
-          <button onClick={()=>setOpen(open===i?null:i)} style={{background:'transparent',border:0,textAlign:'left',width:'100%',padding:0,cursor:'pointer'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <div style={{fontWeight:700,color:NAVY}}>{it.q}</div>
-              <div style={{color:'#888'}}>{open===i?'-':'+'}</div>
-            </div>
-          </button>
-          {open===i && <div style={{marginTop:8,color:'#333'}}>{it.a}</div>}
-        </div>
-      ))}
-    </div>
-  )
-}
+import Accordion from './components/Accordion';
+
+const faqItems = [
+  {q:'How fast is the free audit?', a:"Instant — you'll get a PDF by email within a few minutes."},
+  {q:'What do you need from me?', a:'Only the listing URL and an email. No calendar access, no passwords.'},
+  {q:'Is my listing data private?', a:'Yes. We never contact your guests or publish your listing.'},
+  {q:'How long until I get the paid report?', a:"Within 48 hours; most arrive faster. Brandon reviews each one personally."},
+  {q:'Can I use this for Vrbo or Booking.com listings?', a:"We support Airbnb and Vrbo URLs. If your listing is on Booking.com or another platform, get in touch — we can still run a manual audit."},
+  {q:'What if my listing isn\'t on Airbnb?', a:"We support Airbnb and Vrbo URLs. If your listing is on Booking.com or another platform, get in touch — we can still run a manual audit."},
+  {q:'Is there a money-back guarantee?', a:"If your audit doesn't arrive within 24 hours, we'll refund you in full. No questions asked."},
+];
