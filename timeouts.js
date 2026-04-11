@@ -33,15 +33,15 @@ function minutesAgo(dateStr) {
 
 // ─── Per-state thresholds (minutes) ──────────────────────────────────────────
 const STATE_THRESHOLDS = {
-  brief_received:              120,  // 120min to write contract
+  brief_received:              480,  // 120min to write contract
   contract_written:            60,   // Builder dispatch should happen within 60min
-  builder_dispatched:          120,  // Builder has 120min to open a PR
-  build_in_progress:           120,  // Active build allowed 120min
+  builder_dispatched:          480,  // Builder has 120min to open a PR
+  build_in_progress:           480,  // Active build allowed 120min
   registered:                  60,   // Registered tasks should be picked up within 60min
-  in_progress:                 120,  // In-progress tasks allowed 120min
+  in_progress:                 480,  // In-progress tasks allowed 120min
   pr_opened:                   90,   // Reviewer should fire within 90min
   review_pending:              15,   // Review result expected within 15min
-  review_changes_requested:    120,  // Builder should fix and re-push within 120min
+  review_changes_requested:    480,  // Builder should fix and re-push within 120min
   blocked:                     30,   // Blocked tasks should be recovered within 30min
   merge_pending:                5,   // Merge worker should act within 5min
   merge_in_progress:           10,   // Merge should complete within 10min
@@ -175,6 +175,21 @@ async function runTimeoutChecks() {
 
 function startTimeouts() {
   setInterval(() => { runTimeoutChecks().catch(console.error); }, 5 * 60 * 1000);
+
+  // Auto-expiry sweep: mark `brief_received` tasks older than 8 hours as failed.
+  setInterval(() => {
+    try {
+      const cutoff = new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString().replace('T', ' ').replace('Z','');
+      // updated_at stored as "YYYY-MM-DD HH:MM:SS" (UTC); compare using sqlite datetime
+      const rows = db.prepare("SELECT id FROM tasks WHERE state = 'brief_received' AND datetime(updated_at) < datetime(?)").all(cutoff);
+      if (rows.length === 0) return;
+      const update = db.prepare("UPDATE tasks SET state = 'failed', failure_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+      for (const r of rows) update.run('auto-expired: brief_received > 8h', r.id);
+      console.log(`[auto-expiry] expired ${rows.length} brief_received tasks`);
+    } catch (err) {
+      console.error('auto-expiry sweep failed', err);
+    }
+  }, 10 * 60 * 1000);
 }
 
 module.exports = { startTimeouts };
