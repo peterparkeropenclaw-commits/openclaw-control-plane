@@ -1,5 +1,49 @@
 "use client";
+import './globals.css';
 import React, { useEffect, useState } from "react";
+import Reveal from './components/Reveal';
+
+function GoldPill({href,children,onClick}:{href?:string,children:any,onClick?:any}){
+  const [pressed,setPressed]=useState(false);
+  const style:React.CSSProperties = {
+    background: 'var(--gold, #E8C840)',
+    color: 'var(--navy, #0A1628)',
+    borderRadius:100,
+    padding:'10px 22px',
+    textDecoration:'none',
+    fontFamily:"'Barlow Condensed',sans-serif",
+    fontWeight:900,
+    boxShadow: pressed ? 'var(--shadow-sm)' : 'var(--shadow-gold)',
+    transform: pressed ? 'translateY(1px) scale(0.99)' : undefined,
+    transition: 'box-shadow 120ms ease, transform 120ms ease',
+    display:'inline-block'
+  };
+  const onMouseDown = ()=> setPressed(true);
+  const onMouseUp = ()=> setPressed(false);
+  const onMouseLeave = ()=> setPressed(false);
+  if(href) return <a href={href} onClick={onClick} style={style} onMouseDown={onMouseDown} onMouseUp={onMouseUp} onMouseLeave={onMouseLeave}>{children}</a>
+  return <button onClick={onClick} style={style} onMouseDown={onMouseDown} onMouseUp={onMouseUp} onMouseLeave={onMouseLeave}>{children}</button>
+}
+
+function NavyOutlinePill({href,children}:{href?:string,children:any}){
+  const [hover,setHover]=useState(false);
+  const style:React.CSSProperties = {
+    background: 'transparent',
+    color: 'var(--navy, #0A1628)',
+    border:`2px solid var(--navy, #0A1628)`,
+    borderRadius:100,
+    fontFamily:"'Barlow Condensed',sans-serif",
+    fontWeight:900,
+    textTransform:'uppercase',
+    padding:'14px 36px',
+    textDecoration:'none',
+    boxShadow: hover ? 'var(--shadow-md)' : undefined,
+    transform: hover ? 'translateY(-2px)' : undefined,
+    transition:'box-shadow 140ms ease, transform 140ms ease'
+  };
+  return <a href={href} style={style} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}>{children}</a>
+}
+
 
 const NAVY = "#0A1628";
 const GOLD = "#E8C840";
@@ -41,7 +85,7 @@ export default function HomePage() {
           <img src="/strclinic-logo.svg" alt="STR Clinic" style={{height:36,width:36,borderRadius:6}}/>
           <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,color:NAVY,fontSize:20}}>STR Clinic</span>
         </a>
-        <a href="#audit-form" style={{background:GOLD,color:NAVY,borderRadius:100,padding:'10px 22px',textDecoration:'none',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,boxShadow:'0 4px 16px rgba(232,200,64,0.35)'}}>Get Your Free Audit</a>
+        <GoldPill href="#audit-form">Get Your Free Audit</GoldPill>
       </nav>
 
       {/* Section 1 - Hero */}
@@ -49,7 +93,7 @@ export default function HomePage() {
         <div style={{maxWidth:1200,margin:'0 auto',display:'grid',gridTemplateColumns:'1fr 360px',gap:40,alignItems:'center',padding:'0 24px'}}>
 
           <div>
-            <span style={{display:'inline-block',background:'#E8C840',color:'#0A1628',fontSize:'12px',fontWeight:700,letterSpacing:'1px',textTransform:'uppercase',padding:'4px 14px',borderRadius:'100px',marginBottom:'16px'}}>FREE — No account required</span>
+            <span style={{display:'inline-block',background:'#E8C840',color:'#0A1628',fontSize:'12px',fontWeight:800,letterSpacing:'0.08em',textTransform:'uppercase',padding:'4px 14px',borderRadius:'100px',marginBottom:'16px'}}>FREE — No account required</span>
             <h1 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:80,lineHeight:1,color:NAVY,margin:0,marginBottom:18}}>
               <span style={{display:'inline-block',transition:'opacity 500ms'}} aria-live="polite">{rotating[idx]}</span>
             </h1>
@@ -89,8 +133,8 @@ export default function HomePage() {
       {/* Section 2 - How it works */}
       <section style={{background:ALT_BG,padding:'56px 0'}}>
         <div style={{maxWidth:1200,margin:'0 auto',padding:'0 24px',textAlign:'center'}}>
-          <h2 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:48,color:NAVY,marginBottom:28}}>How it works — 3 easy steps</h2>
-          <div style={{display:'flex',gap:20,justifyContent:'center',flexWrap:'wrap'}}>
+          <Reveal><h2 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:48,color:NAVY,marginBottom:28}}>How it works — 3 easy steps</h2></Reveal>
+          <Reveal delay={80}><div style={{display:'flex',gap:20,justifyContent:'center',flexWrap:'wrap'}}>
             {[{
               n:'1',title:'Submit your listing URL',body:"Paste your Airbnb or Vrbo link — we only need the URL and an email."},
               {n:'2',title:'Get an instant PDF audit',body:"You'll receive a scored audit (PDF) by email — no login required."},
@@ -105,10 +149,12 @@ export default function HomePage() {
                 {s.n==='3' && <div style={{fontSize:'12px',color:GOLD,fontStyle:'italic',marginTop:6}}>→ Delivered within 48 hours</div>}
               </div>
             ))}
-          </div>
-          <div style={{marginTop:28}}>
-            <a href="#audit-form" style={{background:GOLD,color:NAVY,borderRadius:100,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,textTransform:'uppercase',padding:'14px 36px',border:'none',fontSize:'1.1rem',cursor:'pointer',display:'inline-block',textDecoration:'none',marginRight:12,boxShadow:'0 4px 16px rgba(232,200,64,0.35)'}}>Get Your Free Audit</a>
+          </div></Reveal>
+          <div style={{marginTop:28}}> 
+            <Reveal delay={120}><div>
+            <GoldPill href="#audit-form">Get Your Free Audit</GoldPill>
             <a href="/buy" style={{background:'transparent',color:NAVY,border:`2px solid ${NAVY}`,borderRadius:100,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,textTransform:'uppercase',padding:'14px 36px',fontSize:'1.1rem',cursor:'pointer',display:'inline-block',textDecoration:'none'}}>Buy Full Clinic — £199</a>
+            </div></Reveal>
           </div>
         </div>
       </section>
@@ -117,7 +163,7 @@ export default function HomePage() {
       <section style={{background:'#fff',padding:'56px 0'}}>
         <div style={{maxWidth:1200,margin:'0 auto',display:'grid',gridTemplateColumns:'1fr 1fr',gap:32,padding:'0 24px',alignItems:'start'}}>
           {/* Free column */}
-          <div style={{background:ALT_BG,border:'1px solid rgba(10,22,40,0.04)',borderRadius:8,padding:24}}>
+          <Reveal><div style={{background:ALT_BG,border:'1px solid rgba(10,22,40,0.04)',borderRadius:8,padding:24}}>
             <h3 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:40,color:NAVY,margin:0}}>Free Audit</h3>
             <div style={{color:'#444',marginTop:6,fontWeight:700,fontSize:15}}>Instant PDF — no login</div>
             <ul style={{marginTop:14,lineHeight:1.8,color:'#333',paddingLeft:18}}>
@@ -131,12 +177,12 @@ export default function HomePage() {
             </ul>
 
             <div style={{marginTop:16}}>
-              <a href="#audit-form" style={{background:GOLD,color:NAVY,borderRadius:100,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,textTransform:'uppercase',padding:'12px 22px',border:'none',fontSize:'0.95rem',cursor:'pointer',display:'inline-block',textDecoration:'none',boxShadow:'0 4px 12px rgba(232,200,64,0.25)'}}>Get Free Audit →</a>
+              <GoldPill href="#audit-form">Get Free Audit →</GoldPill>
             </div>
-          </div>
+          </div></Reveal>
 
           {/* Paid column */}
-          <div style={{background:NAVY,color:'#fff',borderTop:`3px solid ${GOLD}`,borderRadius:8,padding:20,position:'relative',boxShadow:'0 8px 40px rgba(232,200,64,0.15)'}}>
+          <Reveal delay={60}><div style={{background:NAVY,color:'#fff',borderTop:`3px solid ${GOLD}`,borderRadius:8,padding:20,position:'relative',boxShadow:'0 8px 40px rgba(232,200,64,0.15)'}}>
             <div style={{position:'absolute',top:12,right:12,background:GOLD,color:NAVY,padding:'6px 10px',borderRadius:6,fontWeight:900,fontSize:11}}>MOST POPULAR</div>
             <h3 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:40,color:GOLD,marginTop:6,marginBottom:2}}>Full Clinic</h3>
             <div style={{color:'rgba(255,255,255,0.8)',marginBottom:12,fontWeight:700}}>£199 one-off</div>
@@ -154,10 +200,10 @@ export default function HomePage() {
 
             <div style={{marginTop:18,display:'flex',flexDirection:'column',gap:12,alignItems:'flex-start'}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:44,color:GOLD}}>£199</div>
-              <a href="/buy" style={{background:GOLD,color:NAVY,borderRadius:100,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,textTransform:'uppercase',padding:'12px 22px',border:'none',fontSize:'0.95rem',cursor:'pointer',textDecoration:'none',boxShadow:'0 6px 20px rgba(10,22,40,0.12)'}}>Buy Full Clinic — £199</a>
+              <GoldPill href="/buy">Buy Full Clinic — £199</GoldPill>
               <div style={{fontSize:12,opacity:0.85,fontStyle:'italic',marginTop:6}}>Brandon reviews every paid clinic personally</div>
             </div>
-          </div>
+          </div></Reveal>
         </div>
       </section>
 
@@ -214,11 +260,11 @@ export default function HomePage() {
       {/* Section 5 - Social proof (Before/After + Testimonials) — updated 2026-04-11 */}
       <section style={{background:NAVY,color:'#fff',padding:'64px 0'}}>
         <div style={{maxWidth:1200,margin:'0 auto',padding:'0 24px'}}>
-          <h2 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:48,color:'#fff',marginBottom:8,textAlign:'center'}}>Before → After: copy that converts</h2>
-          <p style={{maxWidth:820,margin:'0 auto 24px',fontSize:16,opacity:0.95,lineHeight:1.5,textAlign:'center'}}>A small rewrite can make your listing visible and irresistible. Below: a concrete before/after example, plus real host results.</p>
+          <Reveal><h2 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:48,color:'#fff',marginBottom:8,textAlign:'center'}}>Before → After: copy that converts</h2></Reveal>
+          <Reveal delay={40}><p style={{maxWidth:820,margin:'0 auto 24px',fontSize:16,opacity:0.95,lineHeight:1.5,textAlign:'center'}}>A small rewrite can make your listing visible and irresistible. Below: a concrete before/after example, plus real host results.</p></Reveal>
 
           {/* Before / After block */}
-          <div style={{display:'flex',gap:16,justifyContent:'center',flexWrap:'wrap',marginTop:12}}>
+          <Reveal delay={80}><div style={{display:'flex',gap:16,justifyContent:'center',flexWrap:'wrap',marginTop:12}}>
             <div style={{width:520,display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
               <div style={{background:'rgba(255,255,255,0.04)',padding:18,borderRadius:8,border:'1px solid rgba(255,255,255,0.06)'}}>
                 <div style={{fontSize:12,color:'#bfc8d6',fontWeight:700,marginBottom:8}}>Before</div>
@@ -238,10 +284,10 @@ export default function HomePage() {
 
               <div style={{gridColumn:'1 / span 2',textAlign:'center',marginTop:8,color:'rgba(255,255,255,0.85)',fontSize:13}}>This change alone can lift click-through rate by 20–40%</div>
             </div>
-          </div>
+          </div></Reveal>
 
           {/* Testimonials */}
-          <div style={{display:'flex',gap:16,justifyContent:'center',marginTop:36,flexWrap:'wrap'}}>
+          <Reveal delay={120}><div style={{display:'flex',gap:16,justifyContent:'center',marginTop:36,flexWrap:'wrap'}}>
             {[
               {t:"Went from 40% to 78% occupancy in 6 weeks. The pricing section alone was worth £199.", n:'James T., Lake District'},
               {t:"Brandon rewrote my title and description. First week after: 3 new bookings.", n:'Sarah M., Cornwall'},
@@ -255,7 +301,7 @@ export default function HomePage() {
                 </div>
               </div>
             ))}
-          </div>
+          </div></Reveal>
 
           <div style={{marginTop:28,textAlign:'center',color:GOLD,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22}}>Real hosts. Real lifts. Real, specific recommendations.</div>
         </div>
@@ -272,7 +318,7 @@ export default function HomePage() {
           </div>
 
           {/* Bio text */}
-          <div>
+          <Reveal delay={60}><div>
             <div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:11,fontWeight:700,letterSpacing:1, textTransform:'uppercase',color:GOLD,marginBottom:10}}>ABOUT BRANDON</div>
             <h2 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:36, textTransform:'uppercase',color:NAVY,margin:0,marginBottom:12}}>Host-to-host. No agency.</h2>
             <p style={{fontFamily:"Inter, system-ui, sans-serif",fontSize:16,color:'rgba(10,22,40,0.8)',marginTop:6,marginBottom:18,lineHeight:1.6}}>Brandon has managed short-term rentals for over a decade — not as an agency, but as a host. Every STR Clinic audit is written by him personally, based on what actually moves bookings: stronger copy, smarter pricing, and a listing algorithm can actually find.</p>
@@ -284,7 +330,7 @@ export default function HomePage() {
             </div>
 
             <div style={{fontSize:14,color:'rgba(10,22,40,0.6)'}}>Questions? <a href="mailto:brandon@strclinic.com" style={{color:'rgba(10,22,40,0.8)',textDecoration:'underline'}}>brandon@strclinic.com</a></div>
-          </div>
+          </div></Reveal>
         </div>
       </section>
 
@@ -320,15 +366,13 @@ function AuditForm(){
   const [loading,setLoading]=useState(false);
   const [success,setSuccess]=useState("");
   const [error,setError]=useState("");
-  const [fieldErrors,setFieldErrors]=useState<{listing?:string,email?:string}>({});
 
   const submit = async (e:React.FormEvent)=>{
     e.preventDefault();
     setError("");
     setSuccess("");
-    setFieldErrors({});
-    if(!/airbnb\.|vrbo\./i.test(listing_url)) return setFieldErrors({listing:'Please provide a valid Airbnb or Vrbo URL.'});
-    if(!/\S+@\S+\.\S+/.test(email)) return setFieldErrors({email:'Please provide a valid email.'});
+    if(!/airbnb\.|vrbo\./i.test(listing_url)) return setError('Please provide a valid Airbnb or Vrbo URL.');
+    if(!/\S+@\S+\.\S+/.test(email)) return setError('Please provide a valid email.');
     setLoading(true);
     try{
       const r = await fetch('/api/free-audit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({listing_url,email})});
@@ -341,92 +385,28 @@ function AuditForm(){
     }finally{setLoading(false)}
   }
 
-  const inputBase:React.CSSProperties = {width:'100%',padding:'12px 14px',minHeight:48,fontSize:16,boxSizing:'border-box',borderRadius:12,border:`1px solid rgba(10,22,40,0.12)`,color:'#072233',outline:'none'};
-  const labelStyle:React.CSSProperties = {fontSize:13,fontWeight:700,marginBottom:6,display:'block'};
-
   return (
     <form onSubmit={submit} style={{marginTop:20,display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,alignItems:'start'}}>
-      <div style={{gridColumn:'1 / span 2'}}>
-        <label style={{textAlign:'left',display:'block'}}>
-          <div style={labelStyle}>Listing URL</div>
-          <input
-            value={listing_url}
-            onChange={e=>setListingUrl(e.target.value)}
-            placeholder="https://www.airbnb.com/rooms/12345678"
-            type="url"
-            inputMode="url"
-            aria-label="Listing URL"
-            style={{...inputBase, border: fieldErrors.listing ? '1px solid #b71c1c' : inputBase.border, background:'#fff', color:'#072233'}}
-          />
-          {fieldErrors.listing && <div style={{color:'#9b1c1c',fontSize:13,marginTop:8}}>{fieldErrors.listing}</div>}
+      <div style={{gridColumn:'1 / span 2',display:'flex',gap:12}}>
+        <label style={{flex:1,textAlign:'left'}}>
+          <div style={{fontSize:13,fontWeight:700,marginBottom:6}}>Listing URL</div>
+          <input value={listing_url} onChange={e=>setListingUrl(e.target.value)} placeholder="https://www.airbnb.com/rooms/12345678" style={{width:'100%',padding:12,border:'1px solid #ddd',borderRadius:14,background:'rgba(255,255,255,0.95)',boxShadow:'inset 0 1px 2px rgba(10,22,40,0.04), 0 1px 0 rgba(255,255,255,0.8)',transition:'border-color 0.15s ease, box-shadow 0.15s ease'}} />
         </label>
       </div>
-
-      <label style={{gridColumn:'1 / span 1',textAlign:'left',display:'block'}}>
-        <div style={labelStyle}>Email</div>
-        <input
-          value={email}
-          onChange={e=>setEmail(e.target.value)}
-          placeholder="you@your-email.com"
-          type="email"
-          inputMode="email"
-          aria-label="Email"
-          style={{...inputBase, border: fieldErrors.email ? '1px solid #b71c1c' : inputBase.border, background:'#fff'}}
-        />
-        {fieldErrors.email && <div style={{color:'#9b1c1c',fontSize:13,marginTop:8}}>{fieldErrors.email}</div>}
+      <label style={{gridColumn:'1 / span 1',textAlign:'left'}}>
+        <div style={{fontSize:13,fontWeight:700,marginBottom:6}}>Email</div>
+        <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@your-email.com" type="email" style={{width:'100%',padding:12,border:'1px solid #ddd',borderRadius:14,background:'rgba(255,255,255,0.95)',boxShadow:'inset 0 1px 2px rgba(10,22,40,0.04), 0 1px 0 rgba(255,255,255,0.8)',transition:'border-color 0.15s ease, box-shadow 0.15s ease'}} />
       </label>
 
       <div style={{gridColumn:'2 / span 1',display:'flex',alignItems:'end',justifyContent:'flex-end'}}>
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            background: GOLD,
-            color: NAVY,
-            borderRadius:100,
-            fontFamily:"'Barlow Condensed',sans-serif",
-            fontWeight:900,
-            textTransform:'uppercase',
-            padding:'12px 22px',
-            border:'none',
-            fontSize:16,
-            cursor:'pointer',
-            boxShadow:'0 6px 20px rgba(10,22,40,0.12)',
-            minHeight:52,
-            width:'100%'
-          }}
-        >
-          {loading ? 'Generating your audit...' : 'Get my free audit'}
-        </button>
+        <GoldPill onClick={undefined}><span>{loading? 'Sending...':'Get my free audit'}</span></GoldPill>
       </div>
 
-      <div style={{gridColumn:'1 / span 2',marginTop:8}}>
-        {success && (
-          <div style={{display:'flex',alignItems:'center',gap:12,background:'#081226',color:GOLD,padding:14,borderRadius:12}}>
-            <div style={{width:36,height:36,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:999,background:GOLD,color:NAVY,fontWeight:900}}>✓</div>
-            <div>
-              <div style={{fontWeight:800}}>Success</div>
-              <div style={{fontSize:13,color:'rgba(232,200,64,0.95)'}}>{success}</div>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div style={{background:'#fff6f6',border:'1px solid #f5c2c2',padding:12,borderRadius:8,color:'#6b1212'}}>{error}</div>
-        )}
-
+      <div style={{gridColumn:'1 / span 2'}}>
+        {success && <div style={{background:'#ecf9f1',border:'1px solid #b6efcf',padding:12,borderRadius:6,color:'#064e2a'}}>{success}</div>}
+        {error && <div style={{background:'#ffecec',border:'1px solid #f5c2c2',padding:12,borderRadius:6,color:'#6b1212'}}>{error}</div>}
         <div style={{fontSize:12,color:'#888',marginTop:8}}>We only use your URL and email to build the audit. We never list or contact guests.</div>
       </div>
-
-      {/* Focus ring styles via inline event handlers */}
-      <style>{`
-        input:focus{ box-shadow: 0 0 0 4px rgba(232,200,64,0.15); border-color: ${GOLD}; }
-        input::placeholder{ color: rgba(10,22,40,0.35); }
-        @media (max-width:700px){
-          form { grid-template-columns: 1fr !important; }
-          div[style*="gridColumn:'2 / span 1'"] button{ width:100% !important; }
-        }
-      `}</style>
     </form>
   )
 }
