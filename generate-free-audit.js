@@ -98,6 +98,7 @@ async function scrapeListingContent(listingUrl) {
           ...(html.match(/https:\/\/a\d\.muscache\.com\/im\/pictures\/[^\s"?]+/g) || []),
         ]);
         const photoCount = photoUrls.size;
+        const heroImage = (html.match(/property="og:image"\s+content="([^"]+)"/) || html.match(/content="([^"]+)"\s+property="og:image"/) || [])[1] || [...photoUrls][0] || null;
 
         // Amenities
         const amenBlock = html.match(/"amenities":\[([\s\S]{10,4000}?)\]/);
@@ -144,6 +145,7 @@ async function scrapeListingContent(listingUrl) {
         resolve({
           propertyName,
           location,
+          heroImage,
           description,
           photoCount,
           amenitiesAvailable,
@@ -160,8 +162,8 @@ async function scrapeListingContent(listingUrl) {
         });
       });
     });
-    req.on('error', () => resolve({ propertyName: null, location: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], amenitiesCount: 0, rating: null, reviewCount: null, roomType: null, ogTitle: '', nightlyRate: null, isSuperhost: false, isGuestFavourite: false, calendarOccupancy: null }));
-    req.setTimeout(20000, () => { req.destroy(); resolve({ propertyName: null, location: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], amenitiesCount: 0, rating: null, reviewCount: null, roomType: null, ogTitle: '', nightlyRate: null, isSuperhost: false, isGuestFavourite: false, calendarOccupancy: null }); });
+    req.on('error', () => resolve({ propertyName: null, location: null, heroImage: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], amenitiesCount: 0, rating: null, reviewCount: null, roomType: null, ogTitle: '', nightlyRate: null, isSuperhost: false, isGuestFavourite: false, calendarOccupancy: null }));
+    req.setTimeout(20000, () => { req.destroy(); resolve({ propertyName: null, location: null, heroImage: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], amenitiesCount: 0, rating: null, reviewCount: null, roomType: null, ogTitle: '', nightlyRate: null, isSuperhost: false, isGuestFavourite: false, calendarOccupancy: null }); });
   });
 }
 
@@ -224,39 +226,39 @@ async function generateAIFields(data, market, scraped, persona) {
   // Persona-appropriate fallback defaults
   const personaDefaults = {
     A: {
-      MAIN_INSIGHT:        `${propertyName} is clearly popular — but the nightly rate is leaving real money on the table. High occupancy at a low rate means you're subsidising guests.`,
-      QUICK_WIN:           `Raise your nightly rate by 15–20% and monitor occupancy for 3 weeks. You'll earn more even if a few nights go unbooked.`,
-      FREE_TIP:            `Add a minimum stay of 3 nights on weekends. It reduces low-rate short stays and lifts your weekly average.`,
-      BRANDON_NOTE_LINE_1: `${propertyName} is filling up — which tells me the demand is there.`,
-      BRANDON_NOTE_LINE_2: `But high occupancy at a low rate is not winning. You're leaving money in guests' pockets.`,
-      BRANDON_NOTE_LINE_3: `The full report shows you exactly where to raise rates without losing occupancy.`,
+      MAIN_INSIGHT:        `${propertyName} looks to be attracting demand, but the current rate may be a little soft for how well the calendar appears to be moving.`,
+      QUICK_WIN:           `Test a modest rate lift of around 10–15% on your strongest dates, then watch booking pace for two to three weeks before going further.`,
+      FREE_TIP:            `Try a three-night weekend minimum on higher-demand periods. It can lift average booking value without needing a full repricing pass.`,
+      BRANDON_NOTE_LINE_1: `${propertyName} appears to be drawing demand already.`,
+      BRANDON_NOTE_LINE_2: `That usually points to pricing headroom rather than a visibility problem.`,
+      BRANDON_NOTE_LINE_3: `The fuller review is where we test how far that headroom likely goes.`,
       cta_strength:        'medium',
     },
     B: {
-      MAIN_INSIGHT:        `${propertyName} is performing well — strong reviews, solid occupancy, and a well-structured listing. The opportunity now is expansion, not repair.`,
-      QUICK_WIN:           `List your property on a second platform — your listing is strong enough to convert with minimal adaptation. CDR-WRITER will recommend the right one for your property type.`,
-      FREE_TIP:            `A/B test two cover photos by switching them monthly. Your current photos are working — a stronger hero shot could push your conversion rate higher.`,
-      BRANDON_NOTE_LINE_1: `${propertyName} is doing what most listings don't — the reviews and occupancy back that up.`,
-      BRANDON_NOTE_LINE_2: `The gap for you isn't the listing itself — it's the channels you're not yet on.`,
-      BRANDON_NOTE_LINE_3: `The full report gives you platform-ready copy so you don't have to adapt it yourself.`,
+      MAIN_INSIGHT:        `${propertyName} appears to be in good shape already. The next opportunity is less about repair and more about sharpening reach and commercial consistency.`,
+      QUICK_WIN:           `Consider trialling a second platform once the title, cover image and lead copy all express the same guest promise.`,
+      FREE_TIP:            `Rotate two strong hero images across different periods. It is a simple way to learn which visual angle draws better engagement.`,
+      BRANDON_NOTE_LINE_1: `${propertyName} already reads stronger than many listings we review.`,
+      BRANDON_NOTE_LINE_2: `The next gain may be in reach and positioning, not a full rewrite.`,
+      BRANDON_NOTE_LINE_3: `A fuller clinic would show where expansion is most likely to pay off.`,
       cta_strength:        'soft',
     },
     C: {
-      MAIN_INSIGHT:        `${propertyName} has a solid foundation but isn't converting the visibility it earns. This is usually a pricing, title, or platform distribution problem — not a content problem.`,
-      QUICK_WIN:           `Lower your nightly rate by 10% for the next 30 days to build booking momentum. Reviews drive algorithm ranking — early traction is worth the short-term margin.`,
-      FREE_TIP:            `Update your listing title to include a specific location keyword. Guests searching for your area won't find you if your title doesn't name it clearly.`,
-      BRANDON_NOTE_LINE_1: `${propertyName} looks well set up — but the bookings aren't matching the listing quality.`,
-      BRANDON_NOTE_LINE_2: `That gap is usually pricing, title visibility, or platform reach — none of which requires a rewrite from scratch.`,
-      BRANDON_NOTE_LINE_3: `The full report pinpoints exactly which lever to pull first.`,
+      MAIN_INSIGHT:        `${propertyName} has a solid foundation, but it may not be converting the attention it earns as well as it could. That usually points to pricing, title clarity, or distribution rather than a fundamentally weak property.`,
+      QUICK_WIN:           `Test one clearer title angle and one small pricing adjustment at the same time, then watch whether booking pace improves over the next few weeks.`,
+      FREE_TIP:            `Make sure the title includes a recognisable location or feature term guests are likely to search for in your market.`,
+      BRANDON_NOTE_LINE_1: `${propertyName} looks better than the booking pace suggests.`,
+      BRANDON_NOTE_LINE_2: `That often means positioning or pricing needs a closer look first.`,
+      BRANDON_NOTE_LINE_3: `The fuller review helps isolate which lever is most worth pulling.`,
       cta_strength:        'medium',
     },
     D: {
-      MAIN_INSIGHT:        `${propertyName} has meaningful gaps in its listing that are directly costing bookings right now. The title, description, and photo sequence all need attention before anything else.`,
-      QUICK_WIN:           `Rewrite your title to lead with your single most compelling feature — be specific. Swap "Cosy cottage" for the one thing guests will pay more for.`,
-      FREE_TIP:            `Add your check-in and check-out times, house rules, and local highlights to your description. It reduces pre-booking questions and signals a professional host.`,
-      BRANDON_NOTE_LINE_1: `${propertyName} has potential that the current listing isn't communicating.`,
-      BRANDON_NOTE_LINE_2: `Weak title, thin description, and low photo count together suppress search ranking and conversion.`,
-      BRANDON_NOTE_LINE_3: `The full report gives you the exact copy and photo sequence to fix this — ready to paste in.`,
+      MAIN_INSIGHT:        `${propertyName} has meaningful listing gaps that are likely making it harder for guests to understand the value quickly. The title, description and photo sequence all look like early priorities.`,
+      QUICK_WIN:           `Rewrite the title around the clearest guest-facing differentiator so the strongest reason to click appears immediately.`,
+      FREE_TIP:            `Add check-in details, practical stay information and local context to the description so more booking questions get answered upfront.`,
+      BRANDON_NOTE_LINE_1: `${propertyName} looks better than the listing currently communicates.`,
+      BRANDON_NOTE_LINE_2: `The early presentation may be creating avoidable conversion friction.`,
+      BRANDON_NOTE_LINE_3: `The full clinic turns that into a clearer order of fixes.`,
       cta_strength:        'hard',
     },
   };
@@ -564,6 +566,124 @@ function populate(template, vars) {
   return template.replace(/\{\{([A-Z0-9_]+)\}\}/g, (match, key) => key in vars ? String(vars[key]) : match);
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function coarseTenScore(value) {
+  const n = Number(value) || 0;
+  if (n <= 2) return 2;
+  if (n <= 4) return 4;
+  if (n <= 6) return 6;
+  if (n <= 8) return 8;
+  return 10;
+}
+
+function coarseHundredScore(value) {
+  const n = Math.max(0, Math.min(100, Number(value) || 0));
+  return Math.round(n / 5) * 5;
+}
+
+function scoreBandLabel(value) {
+  const n = Number(value) || 0;
+  if (n <= 4) return 'Needs attention';
+  if (n <= 6) return 'Fair';
+  if (n <= 8) return 'Good';
+  return 'Strong';
+}
+
+function softenClaim(text) {
+  return String(text || '')
+    .replace(/the algorithm is ranking your listing lower/gi, 'the listing may be earning less visibility than it could')
+    .replace(/algorithm-optimised/gi, 'search-aware')
+    .replace(/reviews drive algorithm ranking/gi, 'early booking momentum can help the listing build stronger traction')
+    .replace(/is estimated to materially improve conversion/gi, 'could improve conversion if the rest of the listing backs it up')
+    .replace(/you are currently leaving those premiums uncaptured/gi, 'there may be seasonal pricing headroom that is not yet being reflected')
+    .replace(/comparable ([^.]+?) achieve /gi, 'comparable $1 can achieve ')
+    .replace(/you are estimated to be running at approximately/gi, 'you may currently be running closer to')
+    .replace(/the gap is real, it is measurable, and the fixes are all implementable within a week/gi, 'The gap looks meaningful, but the exact upside needs a fuller commercial review')
+    .replace(/directly costing bookings right now/gi, 'likely making bookings harder to win than they should be')
+    .replace(/suppress search ranking and conversion/gi, 'can weaken visibility and conversion')
+    .replace(/exactly where to raise rates without losing occupancy/gi, 'where pricing may have room to move, and how cautiously to test it')
+    .replace(/exact copy and photo sequence to fix this/gi, 'a clearer copy direction and photo order to test next')
+    .replace(/Est\. impact:/gi, 'Directional opportunity:')
+    .replace(/missed bookings/gi, 'under-converted demand')
+    .replace(/missed conversions/gi, 'conversion drag')
+    .replace(/missed peak revenue/gi, 'peak-season upside not yet captured');
+}
+
+function renderIssueCards(data) {
+  const fallback = [
+    {
+      issue: 'Title clarity is underselling the listing',
+      description: 'The current headline does not front-load the feature or guest promise most likely to earn the click.',
+      revenue_impact: 'Likely limiting click-through from search rather than clearly signalling what makes the stay worth opening.'
+    },
+    {
+      issue: 'Photo order is not doing the selling early enough',
+      description: 'The strongest visual cues should appear immediately, because most guests form a view before they reach the middle of the gallery.',
+      revenue_impact: 'This usually affects confidence and enquiry quality before price becomes the deciding factor.'
+    },
+    {
+      issue: 'Pricing and positioning need to work together',
+      description: 'When copy, sequence and nightly rate are slightly out of step, a listing can look weaker than the property itself really is.',
+      revenue_impact: 'The opportunity is directional rather than guaranteed, but tightening the offer typically improves booking quality.'
+    }
+  ];
+
+  const issues = Array.isArray(data.top_3_issues) && data.top_3_issues.length ? data.top_3_issues.slice(0, 3) : fallback;
+  return issues.map((item, idx) => `
+    <article class="issue-card">
+      <div class="issue-head">
+        <div class="issue-kicker">Opportunity ${idx + 1}</div>
+        <div class="issue-index">0${idx + 1}</div>
+      </div>
+      <div class="issue-layout">
+        <div>
+          <h3 class="issue-title">${escapeHtml(item.issue || 'Missed opportunity')}</h3>
+          <p class="issue-body">${escapeHtml(softenClaim(item.description || ''))}</p>
+        </div>
+        <div class="issue-aside">
+          <div class="issue-why">Why it matters</div>
+          <p class="issue-impact">${escapeHtml(softenClaim(item.revenue_impact || 'This is a directional improvement opportunity rather than a guaranteed outcome.'))}</p>
+        </div>
+      </div>
+    </article>`).join('');
+}
+
+function renderActionPlan(data) {
+  const actions = [
+    {
+      title: 'Sharpen the first impression',
+      body: data.rewritten_title
+        ? `Use a clearer, search-friendly title such as “${data.rewritten_title}”, then align the lead photo to the same promise.`
+        : 'Rewrite the title around the clearest guest-facing differentiator, then make sure the first photo proves that promise immediately.'
+    },
+    {
+      title: 'Re-sequence for trust, not just completeness',
+      body: 'Bring the most persuasive visual proof into the first three images, then use the rest of the gallery to remove booking friction.'
+    },
+    {
+      title: 'Treat pricing as a second pass',
+      body: 'Once the listing reads more clearly, review seasonal pricing and minimum-stay settings so the commercial signal matches the presentation.'
+    }
+  ];
+
+  return actions.map((item, idx) => `
+    <div class="action-item">
+      <div class="action-num">0${idx + 1}</div>
+      <div>
+        <div class="action-title">${escapeHtml(item.title)}</div>
+        <div class="action-body">${escapeHtml(item.body)}</div>
+      </div>
+    </div>`).join('');
+}
+
 // Scrape calendar occupancy via Playwright script (ENG-034).
 // Returns float 0–1 (occupancy ratio) or null on any failure.
 // Falls back gracefully — never throws, always returns null on error.
@@ -621,7 +741,7 @@ async function main() {
       !data.location      || /^(uk|unknown|unknown location|)$/i.test(data.location.trim()) ||
       !data.title_score   // always scrape if scores not pre-filled
     );
-    let scraped = { propertyName: null, location: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], amenitiesCount: 0, rating: null, reviewCount: null, roomType: null, ogTitle: '', nightlyRate: null, isSuperhost: false, isGuestFavourite: false, calendarOccupancy: null };
+    let scraped = { propertyName: null, location: null, heroImage: null, description: null, photoCount: 0, amenitiesAvailable: [], amenitiesUnavailable: [], amenitiesCount: 0, rating: null, reviewCount: null, roomType: null, ogTitle: '', nightlyRate: null, isSuperhost: false, isGuestFavourite: false, calendarOccupancy: null };
     if (shouldScrape) {
       console.log('Scraping full listing content from Airbnb...');
       scraped = await scrapeListingContent(data.listing_url);
@@ -669,24 +789,48 @@ async function main() {
     const ctaBlock       = buildCtaBlock(ctaStrength, sym, stripeUrl);
     console.log(`  Final persona: ${finalPersona} | CTA strength: ${ctaStrength}`);
 
+    const rawTitleScore = scoreField('title_score');
+    const rawDescScore = scoreField('desc_score');
+    const rawPhotoScore = scoreField('photo_score');
+    const rawPricingScore = scoreField('pricing_score');
+    const rawPlatformScore = scoreField('platform_score');
+    const rawOverallScore = aiFields.overall_score || data.overall_score || 0;
+
+    const titleScore = coarseTenScore(rawTitleScore);
+    const descScore = coarseTenScore(rawDescScore);
+    const photoScore = coarseTenScore(rawPhotoScore);
+    const pricingScore = coarseTenScore(rawPricingScore);
+    const platformScore = coarseTenScore(rawPlatformScore);
+    const overallScore = coarseHundredScore(rawOverallScore);
+
+    const confidenceNote = scraped.calendarOccupancy != null
+      ? `This free audit uses visible listing signals plus a ${scraped.calendarOccupancy}% near-term calendar snapshot. Scores are shown in broad bands to stay honest about free-data certainty.`
+      : 'This free audit uses visible listing signals. Calendar access was unavailable for this run, so scores stay in broad bands rather than pretending to exact precision.';
+
     vars = {
       PROPERTY_NAME:       data.property_name || '',
       LOCATION:            data.location || '',
       DATE:                data.date || new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'}),
+      HERO_IMAGE:          scraped.heroImage || 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1600&q=80',
       STRIPE_URL:          stripeUrl,
       CURRENCY:            sym,
       MARKET_LABEL:        market.marketLabel,
-      SCORE:               aiFields.overall_score || data.overall_score || 0,
-      TITLE_SCORE:         scoreField('title_score'),
-      DESC_SCORE:          scoreField('desc_score'),
-      PHOTO_SCORE:         scoreField('photo_score'),
-      PRICING_SCORE:       scoreField('pricing_score'),
-      PLATFORM_SCORE:      scoreField('platform_score'),
-      TITLE_PCT:           toBarPct(scoreField('title_score')),
-      DESC_PCT:            toBarPct(scoreField('desc_score')),
-      PHOTO_PCT:           toBarPct(scoreField('photo_score')),
-      PRICING_PCT:         toBarPct(scoreField('pricing_score')),
-      PLATFORM_PCT:        toBarPct(scoreField('platform_score')),
+      SCORE:               overallScore,
+      TITLE_SCORE:         titleScore,
+      DESC_SCORE:          descScore,
+      PHOTO_SCORE:         photoScore,
+      PRICING_SCORE:       pricingScore,
+      PLATFORM_SCORE:      platformScore,
+      TITLE_PCT:           toBarPct(titleScore),
+      DESC_PCT:            toBarPct(descScore),
+      PHOTO_PCT:           toBarPct(photoScore),
+      PRICING_PCT:         toBarPct(pricingScore),
+      PLATFORM_PCT:        toBarPct(platformScore),
+      TITLE_BAND:          scoreBandLabel(titleScore),
+      DESC_BAND:           scoreBandLabel(descScore),
+      PHOTO_BAND:          scoreBandLabel(photoScore),
+      PRICING_BAND:        scoreBandLabel(pricingScore),
+      PLATFORM_BAND:       scoreBandLabel(platformScore),
       PLATFORM_OPP_LOW:    market.platformOppLow,
       PLATFORM_OPP_HIGH:   market.platformOppHigh,
       AIRBNB_BENCH_LOW:    market.airbnbBenchLow,
@@ -703,6 +847,11 @@ async function main() {
       BRANDON_NOTE_LINE_1: aiFields.BRANDON_NOTE_LINE_1,
       BRANDON_NOTE_LINE_2: aiFields.BRANDON_NOTE_LINE_2,
       BRANDON_NOTE_LINE_3: aiFields.BRANDON_NOTE_LINE_3,
+      CONFIDENCE_NOTE:     confidenceNote,
+      ISSUE_CARDS:         renderIssueCards(data),
+      ACTION_PLAN:         renderActionPlan(data),
+      SCORE_NARRATIVE:     escapeHtml(softenClaim(data.score_narrative || 'Your property looks more capable than the current listing presentation suggests. The biggest upside appears to be in how clearly the value is being communicated.')),
+      OPPORTUNITY_SUMMARY: escapeHtml(softenClaim(data.opportunity_summary || 'The upside here looks real, but this free audit should be read as directional. The paid clinic is where we pressure-test the commercial case, confidence level and implementation order.')),
       PERSONA:             finalPersona,
       CTA_STRENGTH:        ctaStrength,
       CTA_BLOCK:           ctaBlock,

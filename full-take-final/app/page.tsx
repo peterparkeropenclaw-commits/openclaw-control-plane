@@ -97,7 +97,7 @@ export default function HomePage() {
             <h1 style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:80,lineHeight:1,color:NAVY,margin:0,marginBottom:18}}>
               <span style={{display:'inline-block',transition:'opacity 500ms'}} aria-live="polite">{rotating[idx]}</span>
             </h1>
-            <p style={{fontSize:22,color:'#222',marginTop:6,marginBottom:22}}>Free, instant PDF audit of your listing — score, one quick win, and a revenue estimate.</p>
+            <p style={{fontSize:22,color:'#222',marginTop:6,marginBottom:22,lineHeight:1.65,letterSpacing:'normal'}}>Free, instant PDF audit of your listing — score, one quick win, and a revenue estimate.</p>
             <div style={{display:'flex',gap:'20px',flexWrap:'wrap',fontSize:'13px',color:'#666',marginTop:'12px',marginBottom:'8px'}}>
               <span>⚡ Instant PDF</span><span>✓ No login</span><span>🔒 Your data is private</span>
             </div>
